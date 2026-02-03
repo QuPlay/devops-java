@@ -39,6 +39,16 @@
 DEVOPS_REPO="git@github.com:QuPlay/devops-java.git"
 LOCAL_VERSION_FILE=".githooks/.version"
 TEMP_DIR="/tmp/devops-java-$$"
+LAST_SYNC_FILE=".githooks/.last-sync"
+
+# 防止多模块项目重复执行（60秒内不重复）
+if [ -f "$LAST_SYNC_FILE" ]; then
+    LAST_SYNC=$(cat "$LAST_SYNC_FILE" 2>/dev/null)
+    NOW=$(date +%s)
+    if [ -n "$LAST_SYNC" ] && [ $((NOW - LAST_SYNC)) -lt 60 ]; then
+        exit 0
+    fi
+fi
 
 LOCAL_VERSION=""
 [ -f "$LOCAL_VERSION_FILE" ] && LOCAL_VERSION=$(cat "$LOCAL_VERSION_FILE" 2>/dev/null | tr -d '[:space:]')
@@ -104,11 +114,12 @@ if [ -z "$LOCAL_VERSION" ]; then
     [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
     NEW_VERSION=$(cat .githooks/.version 2>/dev/null | tr -d '[:space:]')
     echo "[DevOps] Git Hooks 安装完成 (v${NEW_VERSION})"
+    date +%s > "$LAST_SYNC_FILE"
     check_environment
     exit 0
 fi
 
-DEVOPS_PATH=$(get_devops_path) || { exit 0; }
+DEVOPS_PATH=$(get_devops_path) || { date +%s > "$LAST_SYNC_FILE"; exit 0; }
 REMOTE_VERSION=$(cat "$DEVOPS_PATH/quality/hooks/.version" 2>/dev/null | tr -d '[:space:]')
 
 if [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
@@ -119,6 +130,7 @@ if [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
     echo "[DevOps] Git Hooks 更新完成"
 fi
 [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
+date +%s > "$LAST_SYNC_FILE"
 exit 0
                     ]]></argument>
                   </arguments>
