@@ -14,9 +14,10 @@ LOCAL_VERSION_FILE=".githooks/.version"
 TEMP_DIR="/tmp/devops-java-$$"
 LAST_SYNC_FILE=".githooks/.last-sync"
 
-# 检测是否在 git hook 中执行（防止 hooks 自我更新导致执行错误）
+# 检测是否在 git hook 中执行
+IN_GIT_HOOK=false
 if [ -n "$GIT_DIR" ] || [ -n "$GIT_INDEX_FILE" ]; then
-    exit 0
+    IN_GIT_HOOK=true
 fi
 
 # 防止多模块项目重复执行（60秒内不重复）
@@ -84,7 +85,7 @@ check_environment() {
     fi
 }
 
-# 如果本地没有 hooks，直接安装
+# 如果本地没有 hooks，直接安装（允许从 git hook 中首次安装）
 if [ -z "$LOCAL_VERSION" ]; then
     echo "[DevOps] Git Hooks 未安装，正在安装..."
     DEVOPS_PATH=$(get_devops_path) || { echo "[DevOps] 警告: 无法获取 devops-java"; exit 0; }
@@ -100,6 +101,16 @@ if [ -z "$LOCAL_VERSION" ]; then
     echo "[DevOps] Git Hooks 安装完成 (v${NEW_VERSION})"
     date +%s > "$LAST_SYNC_FILE"
     check_environment
+
+    # 如果从 git hook 中安装，返回特殊退出码 100，通知 bootstrap 重新执行
+    if [ "$IN_GIT_HOOK" = true ]; then
+        exit 100
+    fi
+    exit 0
+fi
+
+# 如果在 git hook 中执行且 hooks 已安装，跳过更新（防止自我更新导致执行错误）
+if [ "$IN_GIT_HOOK" = true ]; then
     exit 0
 fi
 
