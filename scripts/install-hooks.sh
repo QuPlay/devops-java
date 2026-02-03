@@ -12,6 +12,11 @@ LOCAL_VERSION_FILE="$HOOKS_DIR/.version"
 TEMP_DIR="/tmp/devops-java-$$"
 LAST_SYNC_FILE="$HOOKS_DIR/.last-sync"
 
+# 只在项目根目录执行（.git 是目录而非文件）
+if [ ! -d ".git" ]; then
+    exit 0
+fi
+
 # 检测是否在 git hook 中执行
 IN_GIT_HOOK=false
 if [ -n "$GIT_DIR" ] || [ -n "$GIT_INDEX_FILE" ]; then
