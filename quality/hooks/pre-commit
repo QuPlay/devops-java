@@ -390,9 +390,9 @@ except:
 
     # 输出 JSON 详情
     echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    # 格式化输出 JSON（如果有 python3）
+    # 格式化输出 JSON（保留中文，不转 Unicode）
     if command -v python3 &> /dev/null; then
-        echo "$json" | python3 -m json.tool 2>/dev/null || echo "$json"
+        echo "$json" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin),indent=2,ensure_ascii=False))" 2>/dev/null || echo "$json"
     else
         echo "$json"
     fi
