@@ -1,0 +1,73 @@
+#!/bin/bash
+# ==============================================================================
+# Commit Message Hook
+#
+# Purpose: Enforce conventional commit message format
+# Source:  https://github.com/QuPlay/DevOps-Java
+#
+# Format: <type>(<scope>): <subject>
+# Example: feat(user): add login with Google OAuth
+# ==============================================================================
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Skip merge commits
+if echo "$COMMIT_MSG" | grep -qE "^Merge"; then
+    exit 0
+fi
+
+# Conventional commit pattern
+# Types: feat, fix, refactor, docs, test, chore, style, perf, ci, build, revert
+# Scope: allows any non-parenthesis characters (supports Chinese, English, etc.)
+# Subject: 3-100 characters
+PATTERN="^(feat|fix|refactor|docs|test|chore|style|perf|ci|build|revert)(\([^)]+\))?: .{3,100}$"
+
+# Check first line
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -n 1)
+
+if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
+    echo -e "${RED}[DevOps] Invalid commit message format${NC}"
+    echo ""
+    echo "Your message: $FIRST_LINE"
+    echo ""
+    echo -e "${YELLOW}Expected format:${NC} <type>(<scope>): <subject>"
+    echo ""
+    echo -e "${GREEN}Valid types:${NC}"
+    echo "  feat     - New feature"
+    echo "  fix      - Bug fix"
+    echo "  refactor - Code refactoring"
+    echo "  docs     - Documentation changes"
+    echo "  test     - Test changes"
+    echo "  chore    - Build, CI, dependencies"
+    echo "  style    - Code style (formatting)"
+    echo "  perf     - Performance improvement"
+    echo "  ci       - CI configuration"
+    echo "  build    - Build system changes"
+    echo "  revert   - Revert previous commit"
+    echo ""
+    echo -e "${GREEN}Examples:${NC}"
+    echo "  feat(auth): add Google OAuth login"
+    echo "  fix(wallet): correct balance calculation"
+    echo "  refactor(user): extract validation logic"
+    echo "  docs: update API documentation"
+    echo "  fix(钱包): 修复余额计算"
+    echo "  feat(用户): 新增登录功能"
+    echo ""
+    exit 1
+fi
+
+# Check subject length (3-100 characters)
+SUBJECT_LENGTH=${#FIRST_LINE}
+if [ "$SUBJECT_LENGTH" -gt 100 ]; then
+    echo -e "${RED}[DevOps] Commit message too long (${SUBJECT_LENGTH} > 100 chars)${NC}"
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,39 @@
+# GitLab CI 定时任务配置
+#
+# 使用方法:
+#   1. 将此文件复制到项目根目录的 .gitlab-ci.yml
+#   2. 在 GitLab 项目设置中添加 CI/CD Variables:
+#      - GITLAB_URL (你的 GitLab 地址)
+#      - GITLAB_TOKEN (masked, protected)
+#      - GITLAB_GROUP (要统计的 Group 名称)
+#      - TELEGRAM_BOT_TOKEN (masked, protected, 可选)
+#      - TELEGRAM_CHAT_ID (可选)
+#   3. 在 CI/CD > Schedules 中创建定时任务:
+#      - Description: Daily Code Stats
+#      - Interval: 0 18 * * * (UTC 18:00 = 北京时间 02:00)
+#      - Target branch: main
+#
+
+stages:
+  - metrics
+
+variables:
+  GITLAB_URL: "${GITLAB_URL}"
+  GITLAB_GROUP: "${GITLAB_GROUP}"
+
+daily-code-stats:
+  stage: metrics
+  image: python:3.11-slim
+  rules:
+    # 仅定时任务触发
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  before_script:
+    - pip install requests --quiet
+  script:
+    - python3 scripts/metrics/daily_code_stats.py
+  artifacts:
+    paths:
+      - scripts/metrics/report_*.md
+    expire_in: 30 days
+  tags:
+    - docker

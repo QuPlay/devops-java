@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Git Hooks 自动安装/更新器 (Maven Profile)
+
+  使用方式：在项目 pom.xml 的 </build> 后添加以下 profiles 配置：
+
+  ================================================================
+  Git Hooks 自动安装/更新
+  每次构建检查版本，有更新时自动同步
+  使用 -Dskip.hooks=true 可跳过检查
+  ================================================================
+  <profiles>
+    <profile>
+      <id>sync-hooks</id>
+      <activation>
+        <property>
+          <name>!skip.hooks</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>sync-git-hooks</id>
+                <phase>initialize</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>bash</executable>
+                  <arguments>
+                    <argument>-c</argument>
+                    <argument><![CDATA[
+# Git Hooks 同步脚本
+DEVOPS_REPO="https://github.com/QuPlay/DevOps-Java.git"
+LOCAL_VERSION_FILE=".githooks/.version"
+TEMP_DIR="/tmp/devops-java-$$"
+
+LOCAL_VERSION=""
+[ -f "$LOCAL_VERSION_FILE" ] && LOCAL_VERSION=$(cat "$LOCAL_VERSION_FILE" 2>/dev/null | tr -d '[:space:]')
+
+get_devops_path() {
+    if [ -d "../DevOps-Java" ]; then echo "../DevOps-Java"
+    else
+        rm -rf "$TEMP_DIR"
+        git clone -q --depth 1 "$DEVOPS_REPO" "$TEMP_DIR" 2>/dev/null || return 1
+        echo "$TEMP_DIR"
+    fi
+}
+
+if [ -z "$LOCAL_VERSION" ]; then
+    echo "[DevOps] Git Hooks 未安装，正在安装..."
+    DEVOPS_PATH=$(get_devops_path) || { echo "[DevOps] 警告: 无法获取 DevOps-Java"; exit 0; }
+    mkdir -p .githooks
+    cp "$DEVOPS_PATH/quality/hooks/"* .githooks/ 2>/dev/null || true
+    chmod +x .githooks/* 2>/dev/null || true
+    git config core.hooksPath .githooks
+    [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
+    NEW_VERSION=$(cat .githooks/.version 2>/dev/null | tr -d '[:space:]')
+    echo "[DevOps] Git Hooks 安装完成 (v${NEW_VERSION})"
+    exit 0
+fi
+
+DEVOPS_PATH=$(get_devops_path) || { exit 0; }
+REMOTE_VERSION=$(cat "$DEVOPS_PATH/quality/hooks/.version" 2>/dev/null | tr -d '[:space:]')
+
+if [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
+    echo "[DevOps] Git Hooks 更新: v${LOCAL_VERSION} -> v${REMOTE_VERSION}"
+    cp "$DEVOPS_PATH/quality/hooks/"* .githooks/ 2>/dev/null || true
+    chmod +x .githooks/* 2>/dev/null || true
+    echo "[DevOps] Git Hooks 更新完成"
+fi
+[ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
+exit 0
+                    ]]></argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
+  原理：
+  - 默认启用，每次构建检查版本
+  - 版本不同时自动更新 hooks
+  - 使用 -Dskip.hooks=true 跳过检查
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <!-- 此文件仅作为文档和模板参考 -->
+</project>

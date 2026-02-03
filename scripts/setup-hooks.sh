@@ -1,0 +1,202 @@
+#!/bin/bash
+# ==============================================================================
+# DevOps Git Hooks Setup Script
+#
+# Usage: curl -sSL https://raw.githubusercontent.com/QuPlay/DevOps-Java/main/scripts/setup-hooks.sh | bash
+#    or: ./setup-hooks.sh
+#    or: ./setup-hooks.sh --force  # 强制重新安装
+#
+# Source: https://github.com/QuPlay/DevOps-Java
+# ==============================================================================
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Configuration
+DEVOPS_REPO="https://github.com/QuPlay/DevOps-Java.git"
+DEVOPS_BRANCH="main"
+HOOKS_DIR=".githooks"
+TEMP_DIR="/tmp/devops-java-$$"
+VERSION_FILE=".version"
+
+# Parse arguments
+FORCE_INSTALL=false
+if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
+    FORCE_INSTALL=true
+fi
+
+# Check if we're in a git repository
+if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    echo -e "${RED}Error: Not a git repository${NC}"
+    exit 1
+fi
+
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cd "$PROJECT_ROOT"
+
+# ==============================================================================
+# Get DevOps repository path (local or remote)
+# ==============================================================================
+get_devops_path() {
+    if [ -d "../DevOps-Java" ]; then
+        echo "../DevOps-Java"
+        return 0
+    fi
+
+    # Clone from remote
+    rm -rf "$TEMP_DIR"
+    if git clone -q --depth 1 --branch "$DEVOPS_BRANCH" "$DEVOPS_REPO" "$TEMP_DIR" 2>/dev/null; then
+        echo "$TEMP_DIR"
+        return 0
+    fi
+
+    return 1
+}
+
+# ==============================================================================
+# Get local version
+# ==============================================================================
+get_local_version() {
+    if [ -f "$HOOKS_DIR/$VERSION_FILE" ]; then
+        cat "$HOOKS_DIR/$VERSION_FILE" 2>/dev/null | tr -d '[:space:]'
+    else
+        echo ""
+    fi
+}
+
+# ==============================================================================
+# Get remote version
+# ==============================================================================
+get_remote_version() {
+    local devops_path="$1"
+    if [ -f "$devops_path/quality/hooks/$VERSION_FILE" ]; then
+        cat "$devops_path/quality/hooks/$VERSION_FILE" 2>/dev/null | tr -d '[:space:]'
+    else
+        echo ""
+    fi
+}
+
+# ==============================================================================
+# Install/Update hooks
+# ==============================================================================
+install_hooks() {
+    local devops_path="$1"
+    local local_version="$2"
+    local remote_version="$3"
+
+    # Create hooks directory
+    mkdir -p "$HOOKS_DIR"
+
+    # Copy hooks
+    cp "$devops_path/quality/hooks/"* "$HOOKS_DIR/" 2>/dev/null || true
+    chmod +x "$HOOKS_DIR/"* 2>/dev/null || true
+
+    # Configure git to use project hooks
+    git config core.hooksPath "$HOOKS_DIR"
+
+    # Copy EditorConfig if not exists
+    if [ ! -f ".editorconfig" ] && [ -f "$devops_path/quality/editorconfig/.editorconfig" ]; then
+        cp "$devops_path/quality/editorconfig/.editorconfig" ".editorconfig"
+    fi
+
+    # Show result
+    if [ -z "$local_version" ]; then
+        echo -e "${GREEN}✓ Git hooks installed (v${remote_version})${NC}"
+    else
+        echo -e "${GREEN}✓ Git hooks updated: v${local_version} → v${remote_version}${NC}"
+    fi
+}
+
+# ==============================================================================
+# Main
+# ==============================================================================
+echo -e "${BLUE}╔════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║       DevOps Git Hooks Installer           ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "${GREEN}Project:${NC} $(basename "$PROJECT_ROOT")"
+echo -e "${GREEN}Path:${NC} $PROJECT_ROOT"
+echo ""
+
+# Get local version
+LOCAL_VERSION=$(get_local_version)
+
+# Check if hooks directory exists and has core.hooksPath configured
+HOOKS_PATH_CONFIGURED=$(git config core.hooksPath 2>/dev/null || echo "")
+
+# Quick check: if already installed and not forced, check version first
+if [ -n "$LOCAL_VERSION" ] && [ "$HOOKS_PATH_CONFIGURED" = "$HOOKS_DIR" ] && [ "$FORCE_INSTALL" = false ]; then
+    echo -n "Checking for updates... "
+
+    # Get devops path
+    DEVOPS_PATH=$(get_devops_path) || {
+        echo -e "${YELLOW}SKIPPED (cannot fetch remote)${NC}"
+        echo -e "${GREEN}Current version: v${LOCAL_VERSION}${NC}"
+        exit 0
+    }
+
+    # Get remote version
+    REMOTE_VERSION=$(get_remote_version "$DEVOPS_PATH")
+
+    # Compare versions
+    if [ "$LOCAL_VERSION" = "$REMOTE_VERSION" ]; then
+        echo -e "${GREEN}OK${NC}"
+        echo ""
+        echo -e "${GREEN}✓ Already up to date (v${LOCAL_VERSION})${NC}"
+
+        # Cleanup
+        [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
+        exit 0
+    fi
+
+    echo -e "${YELLOW}Update available: v${LOCAL_VERSION} → v${REMOTE_VERSION}${NC}"
+    echo ""
+else
+    # Fresh install or forced
+    if [ "$FORCE_INSTALL" = true ]; then
+        echo -e "${YELLOW}Force install requested${NC}"
+    elif [ -z "$LOCAL_VERSION" ]; then
+        echo "No hooks installed, starting fresh install..."
+    else
+        echo "Hooks path not configured, reinstalling..."
+    fi
+    echo ""
+
+    echo -n "Fetching from repository... "
+    DEVOPS_PATH=$(get_devops_path) || {
+        echo -e "${RED}FAILED${NC}"
+        echo -e "${RED}Error: Cannot fetch DevOps-Java repository${NC}"
+        echo -e "${YELLOW}Make sure you have internet access${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}OK${NC}"
+
+    REMOTE_VERSION=$(get_remote_version "$DEVOPS_PATH")
+fi
+
+# Install/Update
+echo -n "Installing hooks... "
+install_hooks "$DEVOPS_PATH" "$LOCAL_VERSION" "$REMOTE_VERSION"
+
+# Cleanup temp directory
+[ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
+
+# Summary
+echo ""
+echo -e "${GREEN}════════════════════════════════════════════${NC}"
+echo "Installed hooks:"
+ls -1 "$HOOKS_DIR" 2>/dev/null | grep -v "^\." | while read hook; do
+    echo -e "  ${BLUE}•${NC} $hook"
+done
+echo ""
+echo -e "${YELLOW}Note:${NC} To bypass hooks (not recommended):"
+echo "  git commit --no-verify"
+echo ""
+echo -e "${YELLOW}To force update:${NC}"
+echo "  ./setup-hooks.sh --force"
+echo -e "${GREEN}════════════════════════════════════════════${NC}"

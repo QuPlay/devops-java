@@ -1,0 +1,59 @@
+# ==============================================================================
+# SonarQube Configuration Template
+#
+# Copy this file to your project root as 'sonar-project.properties'
+# and update the project key accordingly.
+#
+# Source: https://github.com/QuPlay/DevOps-Java
+# ==============================================================================
+
+# Project identification
+sonar.projectKey=${PROJECT_KEY}
+sonar.projectName=${PROJECT_NAME}
+
+# Source encoding
+sonar.sourceEncoding=UTF-8
+
+# Java version
+sonar.java.source=17
+sonar.java.target=17
+
+# Source directories
+sonar.sources=src/main/java
+sonar.tests=src/test/java
+sonar.java.binaries=target/classes
+sonar.java.test.binaries=target/test-classes
+
+# Exclusions
+sonar.exclusions=\
+  **/generated/**,\
+  **/target/**,\
+  **/*.xml,\
+  **/*.yml,\
+  **/*.yaml,\
+  **/*.properties
+
+# Test exclusions
+sonar.test.exclusions=\
+  **/test/**
+
+# Coverage
+sonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+
+# Duplications
+sonar.cpd.exclusions=\
+  **/dto/**,\
+  **/bo/**,\
+  **/po/**,\
+  **/vo/**
+
+# Issue severity mapping
+sonar.issue.ignore.multicriteria=e1,e2
+
+# Ignore "Add a private constructor" for utility classes with only static methods
+sonar.issue.ignore.multicriteria.e1.ruleKey=java:S1118
+sonar.issue.ignore.multicriteria.e1.resourceKey=**/*Utils.java
+
+# Ignore "Use try-with-resources" for certain patterns
+sonar.issue.ignore.multicriteria.e2.ruleKey=java:S2095
+sonar.issue.ignore.multicriteria.e2.resourceKey=**/test/**
