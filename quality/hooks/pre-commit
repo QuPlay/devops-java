@@ -72,46 +72,45 @@ fi
 ERRORS=0
 
 # ==============================================================================
-# Check 0: IDEA SonarLint Plugin (BLOCKER)
+# Check 0: SonarQube for IDE Plugin (BLOCKER)
 # ==============================================================================
-echo -n "  Checking SonarLint setup... "
+echo -n "  Checking SonarQube for IDE... "
 
-# 检查 .idea/sonarlint 目录是否存在（说明 SonarLint 已配置）
-SONARLINT_CONFIGURED=false
+# 检查 .idea/sonarlint 目录是否存在（插件配置目录仍为 sonarlint）
+SONAR_CONFIGURED=false
 
 if [ -d ".idea/sonarlint" ] || [ -f ".idea/sonarlint.xml" ]; then
-    SONARLINT_CONFIGURED=true
+    SONAR_CONFIGURED=true
 fi
 
-# macOS: 检查用户级别的 SonarLint 插件
+# macOS: 检查用户级别的插件（目录名仍为 sonarlint）
 if [ -d "$HOME/Library/Application Support/JetBrains" ]; then
     if ls "$HOME/Library/Application Support/JetBrains"/*/plugins/sonarlint* >/dev/null 2>&1; then
-        SONARLINT_CONFIGURED=true
+        SONAR_CONFIGURED=true
     fi
 fi
 
-# Linux: 检查用户级别的 SonarLint 插件
+# Linux: 检查用户级别的插件
 if [ -d "$HOME/.local/share/JetBrains" ]; then
     if ls "$HOME/.local/share/JetBrains"/*/plugins/sonarlint* >/dev/null 2>&1; then
-        SONARLINT_CONFIGURED=true
+        SONAR_CONFIGURED=true
     fi
 fi
 
-# Windows (Git Bash): 检查用户级别的 SonarLint 插件
+# Windows (Git Bash): 检查用户级别的插件
 if [ -d "$APPDATA/JetBrains" ]; then
     if ls "$APPDATA/JetBrains"/*/plugins/sonarlint* >/dev/null 2>&1; then
-        SONARLINT_CONFIGURED=true
+        SONAR_CONFIGURED=true
     fi
 fi
 
-if [ "$SONARLINT_CONFIGURED" = false ]; then
+if [ "$SONAR_CONFIGURED" = false ]; then
     echo -e "${RED}FAILED${NC}"
-    echo -e "${RED}SonarLint plugin not detected!${NC}"
-    echo -e "${YELLOW}Please install SonarLint in IDEA:${NC}"
+    echo -e "${RED}SonarQube for IDE plugin not detected!${NC}"
+    echo -e "${YELLOW}Please install in IDEA:${NC}"
     echo -e "${YELLOW}  1. Settings → Plugins → Marketplace${NC}"
-    echo -e "${YELLOW}  2. Search 'SonarLint' → Install${NC}"
+    echo -e "${YELLOW}  2. Search 'SonarQube for IDE' → Install${NC}"
     echo -e "${YELLOW}  3. Restart IDEA${NC}"
-    echo -e "${YELLOW}  4. Open any Java file to activate SonarLint${NC}"
     ERRORS=$((ERRORS + 1))
 else
     echo -e "${GREEN}OK${NC}"
