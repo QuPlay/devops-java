@@ -36,7 +36,7 @@
                     <argument>-c</argument>
                     <argument><![CDATA[
 # Git Hooks 同步脚本
-DEVOPS_REPO="https://github.com/QuPlay/DevOps-Java.git"
+DEVOPS_REPO="git@github.com:QuPlay/devops-java.git"
 LOCAL_VERSION_FILE=".githooks/.version"
 TEMP_DIR="/tmp/devops-java-$$"
 
@@ -44,7 +44,7 @@ LOCAL_VERSION=""
 [ -f "$LOCAL_VERSION_FILE" ] && LOCAL_VERSION=$(cat "$LOCAL_VERSION_FILE" 2>/dev/null | tr -d '[:space:]')
 
 get_devops_path() {
-    if [ -d "../DevOps-Java" ]; then echo "../DevOps-Java"
+    if [ -d "../devops-java" ]; then echo "../devops-java"
     else
         rm -rf "$TEMP_DIR"
         git clone -q --depth 1 "$DEVOPS_REPO" "$TEMP_DIR" 2>/dev/null || return 1
@@ -54,9 +54,10 @@ get_devops_path() {
 
 if [ -z "$LOCAL_VERSION" ]; then
     echo "[DevOps] Git Hooks 未安装，正在安装..."
-    DEVOPS_PATH=$(get_devops_path) || { echo "[DevOps] 警告: 无法获取 DevOps-Java"; exit 0; }
+    DEVOPS_PATH=$(get_devops_path) || { echo "[DevOps] 警告: 无法获取 devops-java"; exit 0; }
     mkdir -p .githooks
     cp "$DEVOPS_PATH/quality/hooks/"* .githooks/ 2>/dev/null || true
+    cp "$DEVOPS_PATH/quality/hooks/".* .githooks/ 2>/dev/null || true
     chmod +x .githooks/* 2>/dev/null || true
     git config core.hooksPath .githooks
     [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
@@ -71,6 +72,7 @@ REMOTE_VERSION=$(cat "$DEVOPS_PATH/quality/hooks/.version" 2>/dev/null | tr -d '
 if [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
     echo "[DevOps] Git Hooks 更新: v${LOCAL_VERSION} -> v${REMOTE_VERSION}"
     cp "$DEVOPS_PATH/quality/hooks/"* .githooks/ 2>/dev/null || true
+    cp "$DEVOPS_PATH/quality/hooks/".* .githooks/ 2>/dev/null || true
     chmod +x .githooks/* 2>/dev/null || true
     echo "[DevOps] Git Hooks 更新完成"
 fi
