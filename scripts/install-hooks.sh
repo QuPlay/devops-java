@@ -14,6 +14,11 @@ LOCAL_VERSION_FILE=".githooks/.version"
 TEMP_DIR="/tmp/devops-java-$$"
 LAST_SYNC_FILE=".githooks/.last-sync"
 
+# 检测是否在 git hook 中执行（防止 hooks 自我更新导致执行错误）
+if [ -n "$GIT_DIR" ] || [ -n "$GIT_INDEX_FILE" ]; then
+    exit 0
+fi
+
 # 防止多模块项目重复执行（60秒内不重复）
 if [ -f "$LAST_SYNC_FILE" ]; then
     LAST_SYNC=$(cat "$LAST_SYNC_FILE" 2>/dev/null)
