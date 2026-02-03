@@ -451,7 +451,7 @@ fi
 # Final Result
 # ==============================================================================
 echo ""
-if [ $ERRORS -gt 0 ]; then
+if [ ${ERRORS:-0} -gt 0 ]; then
     echo -e "${RED}[DevOps] Pre-commit checks FAILED (${ERRORS} error(s))${NC}"
     echo -e "${YELLOW}To bypass (not recommended): git commit --no-verify${NC}"
     exit 1
