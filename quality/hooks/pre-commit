@@ -3,7 +3,7 @@
 # Pre-commit Hook
 #
 # Purpose: Fast local checks before commit (can be bypassed with --no-verify)
-# Source:  https://github.com/QuPlay/DevOps-Java
+# Source:  https://github.com/QuPlay/devops-java
 # ==============================================================================
 set -e
 
@@ -12,6 +12,52 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# ==============================================================================
+# Auto-update: Check and update hooks if new version available
+# ==============================================================================
+check_and_update_hooks() {
+    local DEVOPS_REPO="git@github.com:QuPlay/devops-java.git"
+    local LOCAL_VERSION_FILE=".githooks/.version"
+    local TEMP_DIR="/tmp/devops-java-$$"
+
+    # 获取本地版本
+    local LOCAL_VERSION=""
+    [ -f "$LOCAL_VERSION_FILE" ] && LOCAL_VERSION=$(cat "$LOCAL_VERSION_FILE" 2>/dev/null | tr -d '[:space:]')
+
+    # 如果没有版本文件，跳过检测（首次安装由 Maven 处理）
+    [ -z "$LOCAL_VERSION" ] && return 0
+
+    # 获取 devops-java 路径
+    local DEVOPS_PATH=""
+    if [ -d "../devops-java" ]; then
+        DEVOPS_PATH="../devops-java"
+    else
+        # 静默克隆，失败则跳过
+        rm -rf "$TEMP_DIR"
+        git clone -q --depth 1 "$DEVOPS_REPO" "$TEMP_DIR" 2>/dev/null || return 0
+        DEVOPS_PATH="$TEMP_DIR"
+    fi
+
+    # 获取远程版本
+    local REMOTE_VERSION=$(cat "$DEVOPS_PATH/quality/hooks/.version" 2>/dev/null | tr -d '[:space:]')
+
+    # 版本不同则更新
+    if [ -n "$REMOTE_VERSION" ] && [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
+        echo -e "${GREEN}[DevOps]${NC} Git Hooks 更新: v${LOCAL_VERSION} -> v${REMOTE_VERSION}"
+        cp "$DEVOPS_PATH/quality/hooks/"* .githooks/ 2>/dev/null || true
+        cp "$DEVOPS_PATH/quality/hooks/".* .githooks/ 2>/dev/null || true
+        chmod +x .githooks/* 2>/dev/null || true
+        echo -e "${GREEN}[DevOps]${NC} Git Hooks 更新完成"
+    fi
+
+    # 清理临时目录
+    [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
+    return 0
+}
+
+# 执行版本检测（静默失败，不影响 commit）
+check_and_update_hooks || true
 
 echo -e "${GREEN}[DevOps]${NC} Running pre-commit checks..."
 
