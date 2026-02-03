@@ -2,31 +2,29 @@
 # ==============================================================================
 # Bootstrap Pre-push Hook
 #
-# Purpose: Auto-install full hooks on first push
-# Source:  https://github.com/QuPlay/devops-java
-#
-# This file should be committed to each project's .githooks/ directory
+# This file should be committed to .githooks/ in each project.
+# It delegates to the full hooks installed in .git/hooks/
 # ==============================================================================
 
+FULL_HOOK=".git/hooks/pre-push"
+VERSION_FILE=".git/hooks/.version"
+
 # Check if full hooks are installed
-if [ -f ".githooks/.version" ]; then
-    # Full hooks installed, this file should have been replaced
-    # If we're still here, something went wrong - just exit
+if [ ! -f "$VERSION_FILE" ]; then
+    echo "[DevOps] Git Hooks 未安装，正在自动安装..."
+    curl -fsSL https://raw.githubusercontent.com/QuPlay/devops-java/main/scripts/install-hooks.sh | bash
+    EXIT_CODE=$?
+
+    if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 100 ]; then
+        echo "[DevOps] 安装失败，跳过检查"
+        exit 0
+    fi
+fi
+
+# Delegate to full hook
+if [ -x "$FULL_HOOK" ]; then
+    exec "$FULL_HOOK" "$@"
+else
+    echo "[DevOps] 警告: 完整 hooks 未找到，跳过检查"
     exit 0
 fi
-
-# Full hooks not installed, download and install
-echo "[DevOps] Git Hooks 未安装，正在自动安装..."
-
-# Download and run install script
-curl -fsSL https://raw.githubusercontent.com/QuPlay/devops-java/main/scripts/install-hooks.sh | bash
-EXIT_CODE=$?
-
-# If install script returns 100, it means hooks were installed from git hook
-# Re-execute the (now full) pre-push hook
-if [ $EXIT_CODE -eq 100 ]; then
-    echo "[DevOps] 重新执行推送检查..."
-    exec .githooks/pre-push "$@"
-fi
-
-exit $EXIT_CODE

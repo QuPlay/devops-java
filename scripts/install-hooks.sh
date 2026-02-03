@@ -4,15 +4,13 @@
 #
 # 使用方式:
 #   curl -fsSL https://raw.githubusercontent.com/QuPlay/devops-java/main/scripts/install-hooks.sh | bash
-#
-# 或本地执行:
-#   bash ../devops-java/scripts/install-hooks.sh
 # ==============================================================================
 
 DEVOPS_REPO="git@github.com:QuPlay/devops-java.git"
-LOCAL_VERSION_FILE=".githooks/.version"
+HOOKS_DIR=".git/hooks"
+LOCAL_VERSION_FILE="$HOOKS_DIR/.version"
 TEMP_DIR="/tmp/devops-java-$$"
-LAST_SYNC_FILE=".githooks/.last-sync"
+LAST_SYNC_FILE="$HOOKS_DIR/.last-sync"
 
 # 检测是否在 git hook 中执行
 IN_GIT_HOOK=false
@@ -49,7 +47,6 @@ check_environment() {
     echo "[DevOps] 检测开发环境..."
     local has_error=false
 
-    # 检测 python3
     if command -v python3 &> /dev/null; then
         echo "[DevOps]   ✓ python3"
     else
@@ -57,7 +54,6 @@ check_environment() {
         has_error=true
     fi
 
-    # 检测 claude CLI
     if command -v claude &> /dev/null; then
         echo "[DevOps]   ✓ claude CLI"
     else
@@ -66,7 +62,6 @@ check_environment() {
         has_error=true
     fi
 
-    # 检测 SonarQube for IDE
     local sonarlint_found=false
     [ -d ".idea/sonarlint" ] || [ -f ".idea/sonarlint.xml" ] && sonarlint_found=true
     [ -d "$HOME/Library/Application Support/JetBrains" ] && ls "$HOME/Library/Application Support/JetBrains"/*/plugins/sonarlint* >/dev/null 2>&1 && sonarlint_found=true
@@ -85,19 +80,18 @@ check_environment() {
     fi
 }
 
-# 如果本地没有 hooks，直接安装（允许从 git hook 中首次安装）
+# 如果本地没有 hooks，直接安装
 if [ -z "$LOCAL_VERSION" ]; then
     echo "[DevOps] Git Hooks 未安装，正在安装..."
     DEVOPS_PATH=$(get_devops_path) || { echo "[DevOps] 警告: 无法获取 devops-java"; exit 0; }
 
-    mkdir -p .githooks
-    cp "$DEVOPS_PATH/quality/hooks/"* .githooks/ 2>/dev/null || true
-    cp "$DEVOPS_PATH/quality/hooks/".* .githooks/ 2>/dev/null || true
-    chmod +x .githooks/* 2>/dev/null || true
-    git config core.hooksPath .githooks
+    mkdir -p "$HOOKS_DIR"
+    cp "$DEVOPS_PATH/quality/hooks/"* "$HOOKS_DIR/" 2>/dev/null || true
+    cp "$DEVOPS_PATH/quality/hooks/".* "$HOOKS_DIR/" 2>/dev/null || true
+    chmod +x "$HOOKS_DIR"/* 2>/dev/null || true
 
     [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
-    NEW_VERSION=$(cat .githooks/.version 2>/dev/null | tr -d '[:space:]')
+    NEW_VERSION=$(cat "$HOOKS_DIR/.version" 2>/dev/null | tr -d '[:space:]')
     echo "[DevOps] Git Hooks 安装完成 (v${NEW_VERSION})"
     date +%s > "$LAST_SYNC_FILE"
     check_environment
@@ -120,9 +114,9 @@ REMOTE_VERSION=$(cat "$DEVOPS_PATH/quality/hooks/.version" 2>/dev/null | tr -d '
 
 if [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
     echo "[DevOps] Git Hooks 更新: v${LOCAL_VERSION} -> v${REMOTE_VERSION}"
-    cp "$DEVOPS_PATH/quality/hooks/"* .githooks/ 2>/dev/null || true
-    cp "$DEVOPS_PATH/quality/hooks/".* .githooks/ 2>/dev/null || true
-    chmod +x .githooks/* 2>/dev/null || true
+    cp "$DEVOPS_PATH/quality/hooks/"* "$HOOKS_DIR/" 2>/dev/null || true
+    cp "$DEVOPS_PATH/quality/hooks/".* "$HOOKS_DIR/" 2>/dev/null || true
+    chmod +x "$HOOKS_DIR"/* 2>/dev/null || true
     echo "[DevOps] Git Hooks 更新完成"
 fi
 
