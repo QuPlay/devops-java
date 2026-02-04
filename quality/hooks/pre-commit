@@ -14,6 +14,19 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# ==============================================================================
+# Python 检测 (支持 python3 和 python 命令)
+# ==============================================================================
+PYTHON_CMD=""
+if command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    # 检查 python 是否为 Python 3
+    if python --version 2>&1 | grep -qE '^Python 3\.'; then
+        PYTHON_CMD="python"
+    fi
+fi
+
 echo -e "${GREEN}[DevOps]${NC} Running pre-commit checks..."
 
 # Get staged Java files
@@ -231,6 +244,12 @@ run_claude_review() {
         return 1
     fi
 
+    # 检查 Python 是否存在 (用于解析 JSON)
+    if [ -z "$PYTHON_CMD" ]; then
+        echo -e "${YELLOW}SKIPPED (Python 3 not found)${NC}"
+        return 0
+    fi
+
     # 获取变更内容
     local changes
     changes=$(git diff --cached --unified=3 -- $STAGED_FILES 2>/dev/null)
@@ -339,9 +358,9 @@ ${changes}"
     local json
 
     # 方法1: 从 result 字段提取 (Claude CLI --output-format json)
-    if echo "$result" | grep -q '"result"'; then
+    if echo "$result" | grep -q '"result"' && [ -n "$PYTHON_CMD" ]; then
         # 提取 result 字段值，处理转义的换行和引号
-        json=$(echo "$result" | python3 -c "
+        json=$(echo "$result" | $PYTHON_CMD -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
@@ -391,8 +410,8 @@ except:
     # 输出 JSON 详情
     echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     # 格式化输出 JSON（保留中文，不转 Unicode）
-    if command -v python3 &> /dev/null; then
-        echo "$json" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin),indent=2,ensure_ascii=False))" 2>/dev/null || echo "$json"
+    if [ -n "$PYTHON_CMD" ]; then
+        echo "$json" | $PYTHON_CMD -c "import sys,json; print(json.dumps(json.load(sys.stdin),indent=2,ensure_ascii=False))" 2>/dev/null || echo "$json"
     else
         echo "$json"
     fi

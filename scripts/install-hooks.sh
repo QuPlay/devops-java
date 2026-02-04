@@ -52,10 +52,24 @@ check_environment() {
     echo "[DevOps] 检测开发环境..."
     local has_error=false
 
+    # 检测 Python 3 (支持 python3 或 python 命令)
+    local python_cmd=""
+    local python_version=""
     if command -v python3 &> /dev/null; then
-        echo "[DevOps]   ✓ python3"
+        python_cmd="python3"
+        python_version=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    elif command -v python &> /dev/null; then
+        # 检查 python 是否为 Python 3
+        python_version=$(python --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        if echo "$python_version" | grep -qE '^3\.'; then
+            python_cmd="python"
+        fi
+    fi
+
+    if [ -n "$python_cmd" ]; then
+        echo "[DevOps]   ✓ Python ${python_version} (${python_cmd})"
     else
-        echo "[DevOps]   ✗ python3 未安装 (必需)"
+        echo "[DevOps]   ✗ Python 3 未安装 (必需)"
         has_error=true
     fi
 
