@@ -6,7 +6,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/QuPlay/devops-java/main/scripts/install-hooks.sh | bash
 # ==============================================================================
 
-DEVOPS_REPO="git@github.com:QuPlay/devops-java.git"
+DEVOPS_REPO="https://github.com/QuPlay/devops-java.git"
 HOOKS_DIR=".git/hooks"
 LOCAL_VERSION_FILE="$HOOKS_DIR/.version"
 TEMP_DIR="/tmp/devops-java-$$"
