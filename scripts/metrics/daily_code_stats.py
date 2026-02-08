@@ -21,15 +21,14 @@
 - REPORT_EMAIL: 报告接收邮箱，逗号分隔 (可选)
 """
 
+import json
 import os
 import re
-import json
 import requests
-from datetime import datetime, timedelta
 from collections import defaultdict
-from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, field
-
+from datetime import datetime, timedelta
+from typing import Dict, List, Tuple, Optional
 
 # ============================================================
 # 配置
