@@ -219,12 +219,55 @@ else
 fi
 
 # ==============================================================================
-# Check 7: Claude AI Code Review (BLOCKER if score < MIN_SCORE)
+# Check 7: Raw thread/pool creation (WARNING)
+# ==============================================================================
+echo -n "  Checking raw thread/pool creation... "
+RAW_THREAD_ISSUES=""
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        result=$(grep -nE "(new\s+Thread\(|Executors\.new)" "$file" 2>/dev/null || true)
+        if [ -n "$result" ]; then
+            RAW_THREAD_ISSUES="${RAW_THREAD_ISSUES}\n  ${file}:\n${result}"
+        fi
+    fi
+done
+
+if [ -n "$RAW_THREAD_ISSUES" ]; then
+    echo -e "${YELLOW}WARNING${NC}"
+    echo -e "${YELLOW}Raw thread/pool creation detected (use project thread pool Beans instead):${NC}${RAW_THREAD_ISSUES}"
+    echo -e "${YELLOW}Available: apiAsyncExecutor / gameAsyncExecutor / taskAsyncExecutor / pushAsyncExecutor${NC}"
+else
+    echo -e "${GREEN}OK${NC}"
+fi
+
+# ==============================================================================
+# Check 8: @Async without pool name (WARNING)
+# ==============================================================================
+echo -n "  Checking @Async pool name... "
+ASYNC_NO_POOL=""
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        result=$(grep -nE '@Async\s*$|@Async\(\s*\)' "$file" 2>/dev/null || true)
+        if [ -n "$result" ]; then
+            ASYNC_NO_POOL="${ASYNC_NO_POOL}\n  ${file}:\n${result}"
+        fi
+    fi
+done
+
+if [ -n "$ASYNC_NO_POOL" ]; then
+    echo -e "${YELLOW}WARNING${NC}"
+    echo -e "${YELLOW}@Async must specify pool name, e.g. @Async(\"gameAsyncExecutor\"):${NC}${ASYNC_NO_POOL}"
+else
+    echo -e "${GREEN}OK${NC}"
+fi
+
+# ==============================================================================
+# Check 9: Claude AI Code Review (BLOCKER if score < MIN_SCORE)
 # ==============================================================================
 
 # Claude 审查配置
 CLAUDE_REVIEW_ENABLED="${CLAUDE_REVIEW_ENABLED:-true}"
-CLAUDE_MIN_SCORE="${CLAUDE_MIN_SCORE:-70}"
+CLAUDE_MIN_SCORE="${CLAUDE_MIN_SCORE:-80}"
 CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-120}"
 CLAUDE_MAX_LINES="${CLAUDE_MAX_LINES:-2000}"
 
@@ -267,15 +310,33 @@ run_claude_review() {
         return 0
     fi
 
-    # 构建审查 prompt
+    # 构建审查 prompt（优先从 rules/ 目录读取，降级使用内联 fallback）
     local prompt
-    prompt=$(cat << 'PROMPT_EOF'
+
+    # 定位 rules 目录（相对于 hooks/ 目录）
+    local hook_dir
+    hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local rules_dir="${hook_dir}/../rules"
+
+    if [ -f "${rules_dir}/review-prompt.md" ] && [ -f "${rules_dir}/scoring-criteria.md" ]; then
+        # 从 rules/ 目录动态拼装
+        local scoring conventions prompt_template
+        scoring=$(cat "${rules_dir}/scoring-criteria.md" 2>/dev/null || echo "")
+        conventions=$(cat "${rules_dir}/project-conventions.md" 2>/dev/null || echo "")
+        prompt_template=$(cat "${rules_dir}/review-prompt.md" 2>/dev/null || echo "")
+
+        # 替换占位符
+        prompt="${prompt_template//\{\{SCORING_CRITERIA\}\}/$scoring}"
+        prompt="${prompt//\{\{PROJECT_CONVENTIONS\}\}/$conventions}"
+    else
+        # Fallback: 内联 prompt（rules/ 目录不存在时降级）
+        prompt=$(cat << 'PROMPT_EOF'
 你是资深 Java 架构师，负责代码审查。请严格按照以下标准审查代码变更。
 
 ## 评分标准 (100分制，起始分100分)
 
 ### 致命问题 (BLOCKER - 存在即阻止提交，不打分)
-1. 事务内同步调用外部服务/推送消息（应使用 TransactionSynchronization.afterCommit）
+1. 事务内同步调用外部服务/推送消息（应使用 TransactionCallbackUtils.doAfterCommitAsync）
 2. N+1 查询 - 循环内执行数据库查询（应批量预加载）
 3. 并发安全 - 余额/库存计算存在竞态条件（应使用数据库原子操作）
 4. SQL 注入 - 字符串拼接 SQL（应使用参数化查询）
@@ -298,7 +359,7 @@ run_claude_review() {
 
 ### 轻微问题 (每项 -2 分)
 1. 命名不规范
-2. public 方法缺少 JavaDoc
+2. Java 方法缺少 JavaDoc 注释（Controller 方法除外，已有请求映射注解自描述）
 3. 中文标点符号出现在注释中
 
 ## 输出格式 (必须严格遵守)
@@ -318,13 +379,15 @@ run_claude_review() {
 
 ## 评判规则
 1. 存在致命问题 (critical) 或严重问题 (serious)，pass 必须为 false，score 设为 0
-2. 仅有一般/轻微问题时，正常打分，score < 70 则 pass 为 false
+2. 仅有一般/轻微问题时，正常打分，score < 80 则 pass 为 false
 3. 没有问题时 issues 返回空数组，score 为 100
 
 ## 待审查的代码变更
 
 PROMPT_EOF
 )
+    fi
+
     prompt="${prompt}
 
 ${changes}"
