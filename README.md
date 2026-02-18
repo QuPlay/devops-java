@@ -92,10 +92,9 @@ goplay-devops (中央仓库)              各服务仓库 (自动同步)
 3. 升级 `quality/hooks/.version` 版本号
 4. 各服务仓库下次 `mvn compile` 或 `git commit` 时自动同步
 
-**手动同步** (无需等待版本更新):
+**手动同步** (无需等待版本更新，在任意服务仓库根目录执行):
 ```bash
-./scripts/sync-claude-md.sh           # 同步到工作区根目录
-./scripts/sync-claude-md.sh --repos   # 同步到工作区 + 每个服务仓库
+../goplay-devops/scripts/sync-claude-md.sh
 ```
 
 ---
