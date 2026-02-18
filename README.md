@@ -6,6 +6,7 @@
 
 | 文档 | 说明 |
 |------|------|
+| **[CLAUDE.md](quality/claude/CLAUDE.md)** | Claude Code 项目指导 (单一真相源) |
 | **[CODE_REVIEW.md](quality/standards/CODE_REVIEW.md)** | 10 分制代码审查标准 (完整版) |
 | **[CHECKLIST.md](quality/standards/CHECKLIST.md)** | 提交前自检清单 (速查版) |
 
@@ -18,6 +19,12 @@
 ```
 DevOps-Java/
 ├── quality/
+│   ├── claude/             # Claude Code 项目指导 (单一真相源)
+│   │   └── CLAUDE.md       # 编码规范 + 项目知识 + 审查人格
+│   ├── rules/              # Pre-commit Hook 审查规则
+│   │   ├── review-prompt.md         # 审查 prompt 模板
+│   │   ├── project-conventions.md   # 基础设施使用规范
+│   │   └── scoring-criteria.md      # 评分标准
 │   ├── standards/          # 代码质量标准 (核心)
 │   │   ├── CODE_REVIEW.md  # 10 分制评分标准
 │   │   └── CHECKLIST.md    # 提交前自检清单
@@ -34,7 +41,8 @@ DevOps-Java/
 │   └── editorconfig/       # 编辑器配置
 │       └── .editorconfig
 ├── scripts/
-│   └── setup-hooks.sh      # 一键安装脚本
+│   ├── setup-hooks.sh      # 一键安装 Git Hooks + CLAUDE.md + 审查规则
+│   └── sync-claude-md.sh   # 手动同步 CLAUDE.md（通常无需使用）
 ├── docs/                   # 详细文档
 └── README.md
 ```
@@ -59,6 +67,36 @@ DevOps-Java/
 **阈值**: `阻断项不通过` 终止 commit | `< 8 分` 拒绝 | `8-9 分` 通过 | `≥ 9 分` 优秀
 
 > 详细标准请查看 [CODE_REVIEW.md](quality/standards/CODE_REVIEW.md)
+
+---
+
+## CLAUDE.md 集中管理
+
+`quality/claude/CLAUDE.md` 是 Claude Code 的项目指导文件，包含编码规范、项目架构知识和代码审查人格定义。
+
+**管理策略**: 在 goplay-devops 维护唯一的 master 副本，通过 hooks 自动安装/更新机制分发到各服务仓库。
+
+```
+goplay-devops (中央仓库)              各服务仓库 (自动同步)
+┌───────────────────────────┐       ┌───────────────────────────┐
+│ quality/claude/CLAUDE.md  │       │ CLAUDE.md                 │ ← 项目根目录
+│ (master, 手动维护)         │ ────> │ ../CLAUDE.md              │ ← 工作区根目录
+│                           │       │ .git/rules/*.md           │ ← 审查规则
+└───────────────────────────┘       └───────────────────────────┘
+         触发时机: hooks 首次安装 / hooks 版本更新 / setup-hooks.sh --force
+```
+
+**修改流程**:
+1. 编辑 `quality/claude/CLAUDE.md`
+2. 提交到 goplay-devops
+3. 升级 `quality/hooks/.version` 版本号
+4. 各服务仓库下次 `mvn compile` 或 `git commit` 时自动同步
+
+**手动同步** (无需等待版本更新):
+```bash
+./scripts/sync-claude-md.sh           # 同步到工作区根目录
+./scripts/sync-claude-md.sh --repos   # 同步到工作区 + 每个服务仓库
+```
 
 ---
 
