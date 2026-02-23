@@ -338,6 +338,24 @@ mvn test
     ```
     - 同接口多实现时用 `@Qualifier` + 语义化名字（如 `firebasePushService`、`smsPushService`）
     - 实现类命名保留 `Impl` 后缀（如 `PromoPushServiceImpl`），但注入点不体现
+13. **QueryWrapper 禁止字符串列名** - 必须使用 `LambdaQueryWrapper` / `LambdaUpdateWrapper`，禁止在 `QueryWrapper` 中写死字符串列名
+    - 字符串列名无编译检查，字段改名后不报错、不告警，运行时才发现问题
+    - Lambda 方法引用由编译器保证类型安全，字段删除或重命名时编译直接失败
+    ```java
+    // ❌ 错误：字符串列名，改字段名不会编译报错
+    new QueryWrapper<CoinPromo>()
+        .eq("uid", uid)
+        .eq("role", reqDto.getRole())
+        .in("refer_extends", reqDto.getReferExtends())
+
+    // ✅ 正确：Lambda 方法引用，编译器保证字段存在
+    new LambdaQueryWrapper<CoinPromo>()
+        .eq(CoinPromo::getUid, uid)
+        .eq(Objects.nonNull(reqDto.getRole()), CoinPromo::getRole, reqDto.getRole())
+        .in(CollectionUtils.isNotEmpty(reqDto.getReferExtends()), CoinPromo::getReferExtends, reqDto.getReferExtends())
+    ```
+    - **唯一例外**：需要 SQL 函数（如 `COALESCE`、`SUM`）的 `select()` 子句，可使用字符串常量
+    - 存量代码发现 `QueryWrapper` + 字符串列名时，应顺手改为 `LambdaQueryWrapper`
 
 ## Infrastructure Conventions (基础设施使用规范)
 
