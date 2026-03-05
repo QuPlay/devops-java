@@ -11,6 +11,7 @@ HOOKS_DIR=".git/hooks"
 LOCAL_VERSION_FILE="$HOOKS_DIR/.version"
 TEMP_DIR="/tmp/devops-java-$$"
 LAST_SYNC_FILE="$HOOKS_DIR/.last-sync"
+GITHOOKS_DIR=".githooks"
 
 # 只在项目根目录执行（.git 是目录而非文件）
 if [ ! -d ".git" ]; then
@@ -82,6 +83,17 @@ sync_assets() {
     fi
 }
 
+# 同步 bootstrap hooks 到 .githooks/（确保 core.hooksPath 指向的目录包含所有 bootstrap）
+sync_bootstrap() {
+    local devops_path="$1"
+    local bootstrap_src="$devops_path/quality/bootstrap"
+    if [ -d "$bootstrap_src" ] && [ -d "$GITHOOKS_DIR" ]; then
+        cp "$bootstrap_src/"* "$GITHOOKS_DIR/" 2>/dev/null || true
+        chmod +x "$GITHOOKS_DIR"/* 2>/dev/null || true
+        echo "[DevOps] Bootstrap hooks synced to $GITHOOKS_DIR/"
+    fi
+}
+
 # 环境检测函数
 check_environment() {
     echo "[DevOps] 检测开发环境..."
@@ -144,6 +156,7 @@ if [ -z "$LOCAL_VERSION" ]; then
     cp "$DEVOPS_PATH/quality/hooks/".* "$HOOKS_DIR/" 2>/dev/null || true
     chmod +x "$HOOKS_DIR"/* 2>/dev/null || true
     sync_assets "$DEVOPS_PATH"
+    sync_bootstrap "$DEVOPS_PATH"
 
     [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
     NEW_VERSION=$(cat "$HOOKS_DIR/.version" 2>/dev/null | tr -d '[:space:]')
@@ -173,6 +186,7 @@ if [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
     cp "$DEVOPS_PATH/quality/hooks/".* "$HOOKS_DIR/" 2>/dev/null || true
     chmod +x "$HOOKS_DIR"/* 2>/dev/null || true
     sync_assets "$DEVOPS_PATH"
+    sync_bootstrap "$DEVOPS_PATH"
     echo "[DevOps] Git Hooks 更新完成"
 fi
 

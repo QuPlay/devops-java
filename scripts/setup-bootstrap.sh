@@ -22,8 +22,9 @@ mkdir -p .githooks
 # 下载 bootstrap hooks
 echo "[DevOps] 下载 bootstrap hooks..."
 curl -fsSL https://raw.githubusercontent.com/QuPlay/devops-java/main/quality/bootstrap/pre-commit -o .githooks/pre-commit
+curl -fsSL https://raw.githubusercontent.com/QuPlay/devops-java/main/quality/bootstrap/commit-msg -o .githooks/commit-msg
 curl -fsSL https://raw.githubusercontent.com/QuPlay/devops-java/main/quality/bootstrap/pre-push -o .githooks/pre-push
-chmod +x .githooks/pre-commit .githooks/pre-push
+chmod +x .githooks/pre-commit .githooks/commit-msg .githooks/pre-push
 
 # 配置 git hooks path
 git config core.hooksPath .githooks
