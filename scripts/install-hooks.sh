@@ -87,7 +87,8 @@ sync_assets() {
 sync_bootstrap() {
     local devops_path="$1"
     local bootstrap_src="$devops_path/quality/bootstrap"
-    if [ -d "$bootstrap_src" ] && [ -d "$GITHOOKS_DIR" ]; then
+    if [ -d "$bootstrap_src" ]; then
+        mkdir -p "$GITHOOKS_DIR"
         cp "$bootstrap_src/"* "$GITHOOKS_DIR/" 2>/dev/null || true
         chmod +x "$GITHOOKS_DIR"/* 2>/dev/null || true
         echo "[DevOps] Bootstrap hooks synced to $GITHOOKS_DIR/"
