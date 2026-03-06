@@ -30,7 +30,20 @@ fi
 echo -e "${GREEN}[DevOps]${NC} Running pre-commit checks..."
 
 # Get staged Java files
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.java$" || true)
+# amend 时 index vs HEAD 可能为空（因为 HEAD 已包含这些变更），需要比较 HEAD~1
+IS_AMEND=false
+if [ -f "$(git rev-parse --git-dir)/MERGE_MSG" ] || \
+   (ps -ocommand= -p $PPID 2>/dev/null | grep -q -- '--amend'); then
+    IS_AMEND=true
+fi
+
+if [ "$IS_AMEND" = true ] && git rev-parse HEAD~1 &>/dev/null; then
+    DIFF_BASE="HEAD~1"
+else
+    DIFF_BASE=""
+fi
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM $DIFF_BASE | grep -E "\.java$" || true)
 
 if [ -z "$STAGED_FILES" ]; then
     echo -e "${GREEN}✓${NC} No Java files to check"
@@ -293,9 +306,9 @@ run_claude_review() {
         return 0
     fi
 
-    # 获取变更内容
+    # 获取变更内容（amend 时比较 HEAD~1）
     local changes
-    changes=$(git diff --cached --unified=3 -- $STAGED_FILES 2>/dev/null)
+    changes=$(git diff --cached --unified=3 $DIFF_BASE -- $STAGED_FILES 2>/dev/null)
 
     if [ -z "$changes" ]; then
         echo -e "${GREEN}OK (no changes)${NC}"
