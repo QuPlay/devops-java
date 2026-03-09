@@ -151,7 +151,9 @@ SENSITIVE_DATA=""
 for file in $STAGED_FILES; do
     if [ -f "$file" ]; then
         # Check for hardcoded passwords, tokens, secrets
-        result=$(grep -nEi "(password|secret|token|apikey|api_key)\s*=\s*[\"'][^\"']+[\"']" "$file" 2>/dev/null | grep -v "// " || true)
+        # Matches: password = "xxx" / token = 'xxx' (Java field assignments)
+        # Excludes: URL query string concatenation like "&token=" + this.token
+        result=$(grep -nEi "(password|secret|token|apikey|api_key)\s*=\s*[\"'][^\"']+[\"']" "$file" 2>/dev/null | grep -v "// " | grep -vE '[&?][a-zA-Z_]+=[\""]' || true)
         if [ -n "$result" ]; then
             SENSITIVE_DATA="${SENSITIVE_DATA}\n  ${file}:\n${result}"
         fi
