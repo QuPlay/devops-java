@@ -159,6 +159,15 @@ if [ -z "$LOCAL_VERSION" ]; then
     sync_assets "$DEVOPS_PATH"
     sync_bootstrap "$DEVOPS_PATH"
 
+    # 设置 core.hooksPath 确保 .githooks bootstrap 能被 git 触发
+    if [ -d "$GITHOOKS_DIR" ]; then
+        CURRENT_HOOKS_PATH=$(git config core.hooksPath 2>/dev/null || echo "")
+        if [ "$CURRENT_HOOKS_PATH" != "$GITHOOKS_DIR" ]; then
+            git config core.hooksPath "$GITHOOKS_DIR"
+            echo "[DevOps] core.hooksPath set to $GITHOOKS_DIR"
+        fi
+    fi
+
     [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
     NEW_VERSION=$(cat "$HOOKS_DIR/.version" 2>/dev/null | tr -d '[:space:]')
     echo "[DevOps] Git Hooks 安装完成 (v${NEW_VERSION})"
@@ -189,6 +198,15 @@ if [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
     sync_assets "$DEVOPS_PATH"
     sync_bootstrap "$DEVOPS_PATH"
     echo "[DevOps] Git Hooks 更新完成"
+fi
+
+# 确保 core.hooksPath 始终正确（修复旧版本安装遗留）
+if [ -d "$GITHOOKS_DIR" ]; then
+    CURRENT_HOOKS_PATH=$(git config core.hooksPath 2>/dev/null || echo "")
+    if [ "$CURRENT_HOOKS_PATH" != "$GITHOOKS_DIR" ]; then
+        git config core.hooksPath "$GITHOOKS_DIR"
+        echo "[DevOps] core.hooksPath set to $GITHOOKS_DIR"
+    fi
 fi
 
 [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
