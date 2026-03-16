@@ -108,7 +108,7 @@ if [ -z "$LOCAL_VERSION" ]; then
     DEVOPS_PATH=$(get_devops_path) || { echo "[DevOps] 警告: 无法获取 devops-java"; exit 0; }
     mkdir -p .githooks
     cp "$DEVOPS_PATH/quality/hooks/"* .githooks/ 2>/dev/null || true
-    cp "$DEVOPS_PATH/quality/hooks/".* .githooks/ 2>/dev/null || true
+    cp "$DEVOPS_PATH/quality/hooks/.version" .githooks/ 2>/dev/null || true
     chmod +x .githooks/* 2>/dev/null || true
     git config core.hooksPath .githooks
     [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
@@ -125,7 +125,7 @@ REMOTE_VERSION=$(cat "$DEVOPS_PATH/quality/hooks/.version" 2>/dev/null | tr -d '
 if [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
     echo "[DevOps] Git Hooks 更新: v${LOCAL_VERSION} -> v${REMOTE_VERSION}"
     cp "$DEVOPS_PATH/quality/hooks/"* .githooks/ 2>/dev/null || true
-    cp "$DEVOPS_PATH/quality/hooks/".* .githooks/ 2>/dev/null || true
+    cp "$DEVOPS_PATH/quality/hooks/.version" .githooks/ 2>/dev/null || true
     chmod +x .githooks/* 2>/dev/null || true
     echo "[DevOps] Git Hooks 更新完成"
 fi

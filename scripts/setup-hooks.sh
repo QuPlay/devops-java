@@ -129,8 +129,9 @@ install_hooks() {
     # Create hooks directory
     mkdir -p "$HOOKS_DIR"
 
-    # Copy hooks
+    # Copy hooks (including hidden files like .version)
     cp "$devops_path/quality/hooks/"* "$HOOKS_DIR/" 2>/dev/null || true
+    cp "$devops_path/quality/hooks/".version "$HOOKS_DIR/" 2>/dev/null || true
     chmod +x "$HOOKS_DIR/"* 2>/dev/null || true
 
     # Configure git to use project hooks
