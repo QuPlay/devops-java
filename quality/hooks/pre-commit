@@ -284,7 +284,7 @@ fi
 CLAUDE_REVIEW_ENABLED="${CLAUDE_REVIEW_ENABLED:-true}"
 CLAUDE_MIN_SCORE="${CLAUDE_MIN_SCORE:-80}"
 CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-120}"
-CLAUDE_MAX_LINES="${CLAUDE_MAX_LINES:-2000}"
+CLAUDE_MAX_LINES="${CLAUDE_MAX_LINES:-0}"
 
 run_claude_review() {
     echo -n "  Running Claude AI code review... "
@@ -317,10 +317,10 @@ run_claude_review() {
         return 0
     fi
 
-    # 检查变更行数
+    # 检查变更行数（CLAUDE_MAX_LINES=0 表示不限制）
     local total_lines
     total_lines=$(echo "$changes" | wc -l | tr -d ' ')
-    if [ "$total_lines" -gt "$CLAUDE_MAX_LINES" ]; then
+    if [ "$CLAUDE_MAX_LINES" -gt 0 ] && [ "$total_lines" -gt "$CLAUDE_MAX_LINES" ]; then
         echo -e "${YELLOW}SKIPPED (${total_lines} lines > ${CLAUDE_MAX_LINES} limit)${NC}"
         return 0
     fi
