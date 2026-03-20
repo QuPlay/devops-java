@@ -166,6 +166,14 @@ When adding new queues, update `MqConst.java` and relevant consumer services.
 - Shared configs: `common.yml`, `redis.yml`, `rabbitmq.yml`, `mysql-{service}.yml`
 - Environment variables: `GOPLAY_NACOS_IP`, `GOPLAY_NACOS_PORT`, `GOPLAY_NACOS_ID`, etc.
 - **Never hardcode** database, Redis, or MQ credentials
+- **bootstrap.yml 禁止敏感配置默认值（合并阻断项）** - `GOPLAY_NACOS_IP`、`GOPLAY_NACOS_PORT`、`GOPLAY_NACOS_ID`、`GOPLAY_NACOS_USERNAME`、`GOPLAY_NACOS_PASSWORD` 必须纯环境变量注入，禁止写默认值。硬编码默认值会导致生产环境 fallback 到测试环境
+  ```yaml
+  # ❌ 禁止：硬编码默认值
+  password: ${GOPLAY_NACOS_PASSWORD:0592e4a07ff2c280805688b2348b4556}
+
+  # ✅ 正确：纯环境变量，无默认值
+  password: ${GOPLAY_NACOS_PASSWORD}
+  ```
 
 ## Exception Handling
 
@@ -174,6 +182,24 @@ When adding new queues, update `MqConst.java` and relevant consumer services.
 - Provider-specific errors use `ProviderExceptionStrategy` pattern
 - All responses wrapped in `Result<T>` format
 - Validation errors use `validate-message.properties` for i18n (8 languages supported)
+- **禁止盲目降级异常** - 代码审查时不要机械地将所有可能的 NPE 都改为静默返回默认值。必须区分场景：
+  - **应该抛出的异常**：数据不一致（查不到应存在的记录）、配置缺失（关键配置为空）、外部回调参数非法 — 这些异常必须抛出，由 `GlobalExceptionHandler` 统一处理并通过 TG 告警通知，便于及时发现和修复问题
+  - **可以降级的异常**：可选配置未填（给默认值）、非关键展示字段缺失（给空值）、缓存未命中（回源查库）
+  - 把本该暴露的异常静默吞掉，等于把一个可追踪的错误变成难以排查的数据污染
+- **禁止无意义封装方法（合并阻断项）** - 方法体内部只有一行方法调用的委托/转发，严重破坏代码可读性，增加无谓的调用层级。审查发现此类代码必须打回，禁止合入主干
+  ```java
+  // ❌ 禁止：方法体只有一行委托，调用方应直接调用目标方法
+  private void doSomething(Long id) {
+      someService.doSomething(id);
+  }
+
+  // ❌ 禁止：getter 式的无逻辑转发
+  public String getName() {
+      return entity.getName();
+  }
+  ```
+  - 唯一例外：接口实现类对 Mapper 的委托（如 `ServiceImpl` 调用 `baseMapper`），这是框架分层约定
+  - 如果封装方法内部有额外逻辑（日志、校验、转换、缓存），则不属于无意义封装
 
 ## Inter-Service Communication
 
@@ -361,6 +387,57 @@ mvn test
     ```
     - **唯一例外**：需要 SQL 函数（如 `COALESCE`、`SUM`）的 `select()` 子句，可使用字符串常量
     - 存量代码发现 `QueryWrapper` + 字符串列名时，应顺手改为 `LambdaQueryWrapper`
+14. **PO 与 BO/DTO 职责分离** - PO 字段必须和数据库表列一一对应，方便后续人员直接对照表结构理解代码
+    - PO 不继承 BO/DTO，所有字段平铺声明，每个字段必须有 `@TableField` 显式映射
+    - BO/DTO 不加 `@TableField`、`@TableName` 等数据库注解，保持纯 POJO
+    - 枚举可跨层共用（PO 字段类型引用 BO 中定义的枚举），但字段本身不能跨层继承
+    ```java
+    // ❌ 错误：PO 继承 BO，看 PO 看不到业务字段
+    public class ConfigInstallGuide extends InstallGuideConfig { ... }
+
+    // ✅ 正确：PO 平铺所有字段，和表结构一一对应
+    public class ConfigInstallGuide {
+        @TableField("show_btn")
+        private Integer showBtn;
+        @TableField("popup_content")
+        private InstallGuideConfig.PopupContent popupContent;  // 枚举可引用 BO
+    }
+    ```
+15. **CodeInfo 错误消息规范** - 错误消息必须全英文，不加句末句号，不含中文
+    ```java
+    // ❌ 错误
+    CHANNEL_NOT_EXISTS(8141, "渠道不存在"),
+    CHANNEL_NOT_EXISTS(8141, "Channel not exists."),
+
+    // ✅ 正确
+    CHANNEL_NOT_EXISTS(8141, "Channel not exists"),
+    ```
+16. **`getById()` 不可信来源的标准写法** - 使用 `Optional.ofNullable().orElseThrow()` 简化 null 检查 + 异常抛出
+    ```java
+    // ✅ 正确：一行完成查询 + null 校验 + 异常
+    ChannelGroup group = Optional.ofNullable(
+            channelGroupService.getById(dto.getId())
+    ).orElseThrow(() -> BusinessException.buildException(CodeInfo.STORE_CHANNEL_GROUP_NOT_EXISTS));
+
+    // ❌ 错误：冗长的 if-null 判断
+    ChannelGroup group = channelGroupService.getById(dto.getId());
+    if (Objects.isNull(group)) {
+        throw BusinessException.buildException(CodeInfo.STORE_CHANNEL_GROUP_NOT_EXISTS);
+    }
+    ```
+    - 折行规则：`Optional.ofNullable(` 独占一行，查询语句缩进，`).orElseThrow(` 与 `Optional` 对齐
+    - 如果后续不需要返回值（仅校验存在性），可省略变量声明
+17. **租户上下文** - `tenantId`、`currency`、`timezone` 统一从 `TenantContext` 获取，禁止从请求参数或硬编码传入
+    ```java
+    // ❌ 错误：从参数传入租户信息
+    public void save(Long tenantId, String currency, SomeDto dto) { ... }
+
+    // ✅ 正确：从上下文获取
+    Integer tenantId = TenantContext.getTenantId();
+    String currency = TenantContext.getCurrency();
+    ```
+    - MyBatis-Plus 的 `FieldFill.INSERT` 会自动填充 `tenantId` / `currency`，正常 CRUD 不需要手动设值
+    - 原生 SQL（Mapper XML）不走自动填充，必须手动从 `TenantContext` 取值设入
 
 ## Infrastructure Conventions (基础设施使用规范)
 
