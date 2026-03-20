@@ -46,7 +46,10 @@
 
 ### 轻微问题 (每项 -2 分)
 1. 命名不规范
-2. Java 方法缺少 JavaDoc 注释（Controller 方法除外，已有请求映射注解自描述）
+2. JavaDoc 注释规则（仅针对类、接口、方法，字段不强制）：
+   - **必须有 JavaDoc**：类、接口、public 方法（Controller 方法除外，已有 @Operation 自描述）
+   - **不需要 JavaDoc**：PO/DTO/BO 的字段 — 已有 `@Schema(description=...)` 注解作为文档，再加 JavaDoc 是冗余。审查时不应对有 `@Schema` 的字段报缺少 JavaDoc
+   - **不需要 JavaDoc**：枚举常量 — 枚举值本身语义自明（如 `NORMAL`, `BONUS`），构造参数 `desc` 已提供描述
 3. 中文标点符号出现在注释中
 4. BigDecimal 使用 new BigDecimal(int) 而非 BigDecimal.valueOf() 或字符串构造
 5. 字符串拼接替代 String.valueOf()（如 channelId + ""）

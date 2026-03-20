@@ -474,9 +474,11 @@ mvn test
 - 消费者继承 `AbstractMqConsumer`，使用 `consume()` 模板方法（自动幂等 + 上下文管理）
 
 ### JavaDoc 注释
-- 所有 Java 方法必须有 JavaDoc 注释（Controller 方法除外，已有请求映射注解自描述）
-- 说明方法职责、参数含义、返回值、异常（如有）
-- 新增/修改代码必须补齐 JavaDoc，不得遗漏
+- **类、接口、public 方法**必须有 JavaDoc 注释（Controller 方法除外，已有 `@Operation` 自描述）
+- 方法 JavaDoc 说明：职责、参数含义、返回值、异常（如有）
+- **PO/DTO/BO 字段不需要 JavaDoc** — 已有 `@Schema(description=...)` 注解作为文档，再加 JavaDoc 是冗余
+- **枚举常量不需要 JavaDoc** — 枚举值语义自明，构造参数 `desc` 已提供描述
+- 新增/修改代码必须补齐类和方法级 JavaDoc，不得遗漏
 
 ## File Structure Reference
 
