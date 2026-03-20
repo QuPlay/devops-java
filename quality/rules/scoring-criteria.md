@@ -12,11 +12,16 @@
    - **不应报告**：缓存方法（*Cache.*()）内部已做 null 兜底的情况
    - **不应报告**：后台管理端传递的 ID（数据由管理员选择，记录必定存在）
    - 判断依据：追溯数据来源，可信来源不加防御，不可信来源必须防御
-7. 裸创线程/线程池（new Thread / Executors.new*），应使用项目配置的线程池 Bean
-8. ThreadLocal 手动 set 后未在 finally 中 clear（Job 场景 LogAspect 兜底除外）
-9. 直接使用 RabbitTemplate 发送消息（应使用 MqSender.sendToExchange）
-10. 无意义封装方法 - 方法体只有一行方法调用的委托/转发（ServiceImpl 对 baseMapper 的框架约定委托除外）
-11. QueryWrapper 使用字符串列名（应使用 LambdaQueryWrapper，JSON 路径查询的 apply 除外）
+7. 多租户查询误报（禁止机械报告）：
+   - MyBatis-Plus 租户拦截器自动追加 `tenant_id` 和 `currency` 两个字段过滤，不需要在代码中手动加 `.eq(Entity::getTenantId, ...)` 或 `.eq(Entity::getCurrency, ...)`
+   - `.lambdaQuery().one()` 在租户隔离下不会返回多条记录（拦截器已保证 tenant_id + currency 维度隔离），不应报告 TooManyResultsException 风险
+   - **不应报告**：查询未显式加 tenantId/currency 条件（拦截器自动处理）
+   - **应报告**：使用了 `TenantIgnoreContext.setIgnore(true)` 绕过拦截器后，查询未手动加 tenantId 过滤
+8. 裸创线程/线程池（new Thread / Executors.new*），应使用项目配置的线程池 Bean
+9. ThreadLocal 手动 set 后未在 finally 中 clear（Job 场景 LogAspect 兜底除外）
+10. 直接使用 RabbitTemplate 发送消息（应使用 MqSender.sendToExchange）
+11. 无意义封装方法 - 方法体只有一行方法调用的委托/转发（ServiceImpl 对 baseMapper 的框架约定委托除外）
+12. QueryWrapper 使用字符串列名（应使用 LambdaQueryWrapper，JSON 路径查询的 apply 除外）
 
 ### 严重问题 (BLOCKER - 存在即阻止提交，不打分)
 1. 方法超过 120 行
