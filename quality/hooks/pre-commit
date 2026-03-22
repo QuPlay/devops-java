@@ -277,7 +277,103 @@ else
 fi
 
 # ==============================================================================
-# Check 9: Claude AI Code Review (BLOCKER if score < MIN_SCORE)
+# Check 9: @PreAuthorize on merchant-service Controller (BLOCKER)
+# 仅限 merchant-service: 其他服务的权限模型不同
+#   - api-service: JWT + 用户角色
+#   - game-service: 签名验证
+#   - merchant-service: Spring Security @PreAuthorize + RBAC
+# ==============================================================================
+echo -n "  Checking @PreAuthorize on Controllers... "
+
+# 收集 merchant-service Controller 文件
+MERCHANT_CONTROLLERS=""
+for file in $STAGED_FILES; do
+    if echo "$file" | grep -q "merchant-service.*controller/.*Controller\.java$"; then
+        if [ -f "$file" ]; then
+            basename_file=$(basename "$file")
+            case "$basename_file" in
+                GeneralController.java|ExcelController.java|ExportFileController.java|ImportDocumentController.java)
+                    continue
+                    ;;
+            esac
+            MERCHANT_CONTROLLERS="${MERCHANT_CONTROLLERS} ${file}"
+        fi
+    fi
+done
+
+if [ -z "$MERCHANT_CONTROLLERS" ]; then
+    echo -e "${GREEN}OK (no Controller changes)${NC}"
+elif [ -z "$PYTHON_CMD" ]; then
+    echo -e "${RED}FAILED (Python 3 required for @PreAuthorize check)${NC}"
+    ERRORS=$((ERRORS + 1))
+else
+    PREAUTH_HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    check_script="${PREAUTH_HOOK_DIR}/check-preauthorize.py"
+    if [ ! -f "$check_script" ]; then
+        echo -e "${RED}FAILED (check-preauthorize.py not found)${NC}"
+        ERRORS=$((ERRORS + 1))
+    else
+        PREAUTH_RESULT=$(echo "$MERCHANT_CONTROLLERS" | $PYTHON_CMD "$check_script" 2>/dev/null || echo "SKIP")
+
+        if echo "$PREAUTH_RESULT" | grep -q "^MISSING"; then
+            echo -e "${RED}FAILED${NC}"
+            echo -e "${RED}merchant-service Controller endpoints missing @PreAuthorize:${NC}"
+            # 输出 MISSING 部分
+            echo "$PREAUTH_RESULT" | sed -n '/^MISSING$/,/^CONVENTION$/{/^MISSING$/d;/^CONVENTION$/d;p}' | while read -r line; do
+                if echo "$line" | grep -q "Add:"; then
+                    echo -e "    ${YELLOW}${line}${NC}"
+                else
+                    echo -e "  ${RED}${line}${NC}"
+                fi
+            done
+            # 输出 CONVENTION 部分 (如果有)
+            if echo "$PREAUTH_RESULT" | grep -q "^CONVENTION"; then
+                echo -e "${YELLOW}Naming convention issues:${NC}"
+                echo "$PREAUTH_RESULT" | sed -n '/^CONVENTION$/,${/^CONVENTION$/d;p}' | while read -r line; do
+                    echo -e "  ${YELLOW}${line}${NC}"
+                done
+            fi
+            echo -e "${YELLOW}Permission SQL guide: quality/standards/gen-permission.md${NC}"
+            ERRORS=$((ERRORS + 1))
+        elif echo "$PREAUTH_RESULT" | grep -q "^CONVENTION"; then
+            echo -e "${YELLOW}WARNING (naming convention)${NC}"
+            echo "$PREAUTH_RESULT" | sed -n '/^CONVENTION$/,${/^CONVENTION$/d;p}' | while read -r line; do
+                echo -e "  ${YELLOW}${line}${NC}"
+            done
+        elif echo "$PREAUTH_RESULT" | grep -q "^OK"; then
+            echo -e "${GREEN}OK${NC}"
+        else
+            echo -e "${YELLOW}SKIPPED${NC}"
+        fi
+    fi
+fi
+
+# ==============================================================================
+# Check 10: CamelCase in REST API path (WARNING)
+# 排除: 路径变量 {xxxId}、类级 @RequestMapping
+# ==============================================================================
+echo -n "  Checking REST API path style... "
+CAMEL_PATH=""
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        # 仅检查方法级 Mapping，排除类级 @RequestMapping
+        result=$(grep -nE '@(Post|Get|Put|Delete|Patch)Mapping\(.*"[^"]*[A-Z][^"]*"' "$file" 2>/dev/null | grep -v '{[a-zA-Z]*}' || true)
+        if [ -n "$result" ]; then
+            CAMEL_PATH="${CAMEL_PATH}\n  ${file}:\n${result}"
+        fi
+    fi
+done
+
+if [ -n "$CAMEL_PATH" ]; then
+    echo -e "${YELLOW}WARNING${NC}"
+    echo -e "${YELLOW}REST API paths should use kebab-case, not camelCase:${NC}${CAMEL_PATH}"
+    echo -e "${YELLOW}Example: /installGuide → /install-guide${NC}"
+else
+    echo -e "${GREEN}OK${NC}"
+fi
+
+# ==============================================================================
+# Check 11: Claude AI Code Review (BLOCKER if score < MIN_SCORE)
 # ==============================================================================
 
 # Claude 审查配置

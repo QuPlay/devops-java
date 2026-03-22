@@ -195,3 +195,38 @@ CompletableFuture.runAsync(() -> doSomething(), executor);
 ```
 
 **检测信号**: `CompletableFuture.runAsync` 或 `CompletableFuture.supplyAsync` 后无 `.exceptionally` / `.handle` / `.whenComplete`
+
+---
+
+### 7. REST API 路径规范 (一般)
+
+**规则**: API 路径使用小写，复合名词用短横线（kebab-case），资源层级用斜杠分段。存量驼峰路径逐步迁移。
+
+**正确做法**:
+```java
+@RequestMapping("/v1/channel/")
+
+@PostMapping("/install-guide")           // 复合名词用短横线
+@PostMapping("/install-guide/update")    // 资源 + 操作
+@PostMapping("/batch/replace")           // 资源层级用斜杠
+@PostMapping("/group/page")              // 资源 + 操作
+```
+
+**反模式**:
+```java
+@PostMapping("/installGuide")            // 驼峰命名
+@PostMapping("/batchReplace")            // 驼峰命名
+@PostMapping("/channelGroup/save")       // 驼峰命名
+```
+
+**路径设计原则**:
+1. **全小写**: 不使用大写字母
+2. **复合名词用短横线**: `/install-guide` 而非 `/installGuide`（kebab-case 是 RFC 3986 推荐风格）
+3. **资源层级用斜杠**: `/group/page`（group 和 page 是不同层级）
+4. **操作放末段**: `/group/update` 而非 `/updateGroup`
+5. **RequestMapping 基路径**: Controller 级别用 `/v1/{resource}/` 格式
+6. **存量迁移**: 已上线的驼峰路径逐步改为 kebab-case，前后端同步修改
+
+**注意**: `@PreAuthorize` 中的 perms 字符串（如 `ops_channelManage_link`）不受此规则约束，perms 用下划线分隔层级是权限系统约定
+
+**检测信号**: `@PostMapping` / `@GetMapping` 等注解中的路径包含大写字母
