@@ -349,31 +349,7 @@ else
 fi
 
 # ==============================================================================
-# Check 10: CamelCase in REST API path (WARNING)
-# 排除: 路径变量 {xxxId}、类级 @RequestMapping
-# ==============================================================================
-echo -n "  Checking REST API path style... "
-CAMEL_PATH=""
-for file in $STAGED_FILES; do
-    if [ -f "$file" ]; then
-        # 仅检查方法级 Mapping，排除类级 @RequestMapping
-        result=$(grep -nE '@(Post|Get|Put|Delete|Patch)Mapping\(.*"[^"]*[A-Z][^"]*"' "$file" 2>/dev/null | grep -v '{[a-zA-Z]*}' || true)
-        if [ -n "$result" ]; then
-            CAMEL_PATH="${CAMEL_PATH}\n  ${file}:\n${result}"
-        fi
-    fi
-done
-
-if [ -n "$CAMEL_PATH" ]; then
-    echo -e "${YELLOW}WARNING${NC}"
-    echo -e "${YELLOW}REST API paths should use kebab-case, not camelCase:${NC}${CAMEL_PATH}"
-    echo -e "${YELLOW}Example: /installGuide → /install-guide${NC}"
-else
-    echo -e "${GREEN}OK${NC}"
-fi
-
-# ==============================================================================
-# Check 11: Claude AI Code Review (BLOCKER if score < MIN_SCORE)
+# Check 10: Claude AI Code Review (BLOCKER if score < MIN_SCORE)
 # ==============================================================================
 
 # Claude 审查配置

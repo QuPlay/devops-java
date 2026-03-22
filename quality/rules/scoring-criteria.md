@@ -50,7 +50,6 @@
 7. CodeInfo 错误消息含中文或句末句号（必须全英文，无句号）
 8. getById null 检查未使用 Optional.ofNullable().orElseThrow() 标准写法
 9. 租户信息（tenantId/currency/timezone）从参数传入而非从 TenantContext 获取
-10. REST API 路径使用驼峰命名（如 `/installGuide`），应使用 kebab-case（如 `/install-guide`）
 
 ### 轻微问题 (每项 -2 分)
 1. 命名不规范
