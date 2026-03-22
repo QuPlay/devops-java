@@ -198,9 +198,9 @@ CompletableFuture.runAsync(() -> doSomething(), executor);
 
 ---
 
-### 7. REST API 路径规范 (一般)
+### 7. REST API 路径规范 (一般，仅约束新增代码)
 
-**规则**: API 路径使用小写，复合名词用短横线（kebab-case），资源层级用斜杠分段。存量驼峰路径逐步迁移。
+**规则**: 新增 API 路径使用小写，复合名词用短横线（kebab-case），资源层级用斜杠分段。存量驼峰路径保持不变。
 
 **正确做法**:
 ```java
@@ -225,7 +225,7 @@ CompletableFuture.runAsync(() -> doSomething(), executor);
 3. **资源层级用斜杠**: `/group/page`（group 和 page 是不同层级）
 4. **操作放末段**: `/group/update` 而非 `/updateGroup`
 5. **RequestMapping 基路径**: Controller 级别用 `/v1/{resource}/` 格式
-6. **存量迁移**: 已上线的驼峰路径逐步改为 kebab-case，前后端同步修改
+6. **存量不动**: 已上线的驼峰路径保持不变，避免前后端大规模同步改动
 
 **注意**: `@PreAuthorize` 中的 perms 字符串（如 `ops_channelManage_link`）不受此规则约束，perms 用下划线分隔层级是权限系统约定
 
