@@ -318,9 +318,9 @@ else
         if echo "$PREAUTH_RESULT" | grep -q "^MISSING"; then
             echo -e "${RED}FAILED${NC}"
             echo -e "${RED}merchant-service Controller endpoints missing @PreAuthorize:${NC}"
-            # 输出 MISSING 部分
-            echo "$PREAUTH_RESULT" | sed -n '/^MISSING$/,/^CONVENTION$/{/^MISSING$/d;/^CONVENTION$/d;p}' | while read -r line; do
-                if echo "$line" | grep -q "Add:"; then
+            # 输出 MISSING 部分 (MISSING 和 CONVENTION 之间的行)
+            echo "$PREAUTH_RESULT" | awk '/^MISSING$/{f=1;next} /^CONVENTION$/{f=0} f' | while read -r line; do
+                if echo "$line" | grep -q "@PreAuthorize"; then
                     echo -e "    ${YELLOW}${line}${NC}"
                 else
                     echo -e "  ${RED}${line}${NC}"
@@ -329,7 +329,7 @@ else
             # 输出 CONVENTION 部分 (如果有)
             if echo "$PREAUTH_RESULT" | grep -q "^CONVENTION"; then
                 echo -e "${YELLOW}Naming convention issues:${NC}"
-                echo "$PREAUTH_RESULT" | sed -n '/^CONVENTION$/,${/^CONVENTION$/d;p}' | while read -r line; do
+                echo "$PREAUTH_RESULT" | awk '/^CONVENTION$/{f=1;next} f' | while read -r line; do
                     echo -e "  ${YELLOW}${line}${NC}"
                 done
             fi
@@ -337,7 +337,7 @@ else
             ERRORS=$((ERRORS + 1))
         elif echo "$PREAUTH_RESULT" | grep -q "^CONVENTION"; then
             echo -e "${YELLOW}WARNING (naming convention)${NC}"
-            echo "$PREAUTH_RESULT" | sed -n '/^CONVENTION$/,${/^CONVENTION$/d;p}' | while read -r line; do
+            echo "$PREAUTH_RESULT" | awk '/^CONVENTION$/{f=1;next} f' | while read -r line; do
                 echo -e "  ${YELLOW}${line}${NC}"
             done
         elif echo "$PREAUTH_RESULT" | grep -q "^OK"; then

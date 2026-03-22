@@ -112,12 +112,6 @@
    - 默认按照识别结果生成
    - 用户可选择将某些模块独立或合并
 
-5. **不在映射表中的子权限翻译** (必填, 逐个询问)
-   - 映射表已定义的子权限后缀: `_view`, `_add`, `_update`, `_delete`, `_remove`, `_export`, `_import`, `_sort`, `_detail`, `_status`, `_create`
-   - 对于不在映射表中的子权限 (如 `_custom`, `_approve`, `_reject` 等), 逐个询问中文翻译
-   - 询问格式: "请输入子权限 '{perms}' 的中文翻译"
-   - 提供推荐选项或让用户自定义输入
-   - **重要**: 询问后将用户提供的翻译自动添加到映射表中, 下次不再询问
 
 **示例询问（单个二级菜单情况）：**
 ```json
@@ -187,7 +181,7 @@
 
 ### Step 5: 生成 SQL 脚本
 
-根据权限层级和用户配置，生成完整的 SQL 脚本，包含以下 7 个部分：
+根据权限层级和用户配置，生成完整的 SQL 脚本，包含以下 6 个部分：
 
 #### 5.1 全局变量初始化
 ```sql
@@ -330,47 +324,21 @@ ORDER BY m.id;
 - **自动递增 ID**：使用变量赋值 `@baseRoleMenuId := @baseRoleMenuId + 1` 自动生成 ID
 - **多租户支持**：自动关联 `tenant_id` 字段
 
-#### 5.5 中文翻译更新 (必须放在最后，角色关联之后)
+#### 5.5 中文翻译插入 (sp_translation)
 
-**翻译生成规则:**
-- ✅ **生成翻译**: 二级菜单, 三级菜单, 四级菜单 (及更深层级), 不在映射表中的子权限
-- ❌ **不生成翻译**: 映射表中已定义的子权限 (`_view`, `_add`, `_update`, `_delete`, `_remove`, `_export`, `_import`, `_sort`, `_detail`, `_status`, `_create`)
+**翻译规则:**
+- **必须插入翻译**: 二级菜单, 三级菜单/Tab, 四级菜单, 不在标准映射表中的按钮
+- **不需要插入翻译**: 标准操作按钮 (`Operation-Add`, `Operation-Modify`, `Operation-Delete`, `Operation-Export` 等) — 全局已有翻译
+- 使用 **INSERT ... WHERE NOT EXISTS** 保证幂等
 
-**对每个需要翻译的菜单生成独立的 UPDATE 语句 (放在角色关联之后):**
 ```sql
--- 8. 更新中文翻译 (sp_translation)
+-- 翻译插入
+SET @transMaxId := (SELECT IFNULL(MAX(id), 0) FROM sp_translation);
 
--- {二级菜单中文名}
-SET @menuName_{suffix} := (SELECT menu_name FROM sp_store_auth_menu WHERE perms = '{main_perms}' LIMIT 1);
-UPDATE sp_translation
-SET translation = '{中文翻译}',
-    updated_at = @nowTime
-WHERE source = @menuName_{suffix}
-  AND translation_language = 'zh';
-
--- {三级菜单中文名}
-SET @menuName_{suffix} := (SELECT menu_name FROM sp_store_auth_menu WHERE perms = '{feature_perms}' LIMIT 1);
-UPDATE sp_translation
-SET translation = '{中文翻译}',
-    updated_at = @nowTime
-WHERE source = @menuName_{suffix}
-  AND translation_language = 'zh';
-
--- {四级菜单中文名} (如果存在)
-SET @menuName_{suffix} := (SELECT menu_name FROM sp_store_auth_menu WHERE perms = '{sub_feature_perms}' LIMIT 1);
-UPDATE sp_translation
-SET translation = '{中文翻译}',
-    updated_at = @nowTime
-WHERE source = @menuName_{suffix}
-  AND translation_language = 'zh';
-
--- {不在映射表中的子权限中文名} (如 _custom, _approve, _reject)
-SET @menuName_{suffix} := (SELECT menu_name FROM sp_store_auth_menu WHERE perms = '{sub_perms}' LIMIT 1);
-UPDATE sp_translation
-SET translation = '{中文翻译}',
-    updated_at = @nowTime
-WHERE source = @menuName_{suffix}
-  AND translation_language = 'zh';
+-- {菜单英文名} → {中文翻译}
+INSERT INTO sp_translation (id, table_name, column_name, source, translation, source_language, translation_language, is_machine_translated, created_at, updated_at, updated_by)
+SELECT @transMaxId := @transMaxId + 1, 'sp_store_auth_menu', 'menu_name', '{EnglishMenuName}', '{中文翻译}', 'en', 'zh', 0, @nowTime, @nowTime, 'admin'
+WHERE NOT EXISTS (SELECT 1 FROM sp_translation WHERE source = '{EnglishMenuName}' AND translation_language = 'zh' AND table_name = 'sp_store_auth_menu');
 ```
 
 #### 5.6 权限清单注释
@@ -443,27 +411,7 @@ benefit_box_record_export  → sort: 1100 (第 2 个出现)
 
 ---
 
-### Step 7: 自动更新映射表
-
-**如果 Step 4 中询问了新的子权限翻译, 必须执行此步骤:**
-
-1. 使用 Edit 工具修改本 Command 文件 (`.claude/commands/gen-permission.md`)
-2. 在 "子权限操作名映射表" 中追加新的映射项
-3. 更新 Step 4 第 84 行和 Step 5.5 第 282 行的映射表后缀列表
-
-**示例: 用户提供了 `_approve` → "审批" 的翻译**
-
-```markdown
-# 在映射表中追加:
-| `_approve` | Operation-Approve | 审批 |
-
-# 更新后缀列表:
-映射表已定义的子权限后缀: `_view`, `_add`, ..., `_status`, `_approve`
-```
-
----
-
-### Step 8: 输出文件
+### Step 7: 输出文件
 
 将生成的 SQL 脚本保存到 **merchant-service 根目录下的 `.permissions/` 目录**：
 ```
@@ -487,9 +435,6 @@ goplay-merchant-service/.permissions/{controller_name}_permissions.sql
    - 子权限：15 个
    - 总行数：210 行
 
-📝 映射表更新 (如果有新增)：
-   - 新增子权限后缀：_custom, _approve
-   - 已自动更新至 Command 文件
 
 ⚠️  执行前请确认：
    1. sp_store_auth_menu 表中已存在父菜单 (perms = 'benefit')
