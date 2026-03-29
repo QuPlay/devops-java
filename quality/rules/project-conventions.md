@@ -60,7 +60,16 @@ CompletableFuture.runAsync(() -> doSomething(), executor);
 CompletableFuture.supplyAsync(() -> query());
 ```
 
-**检测信号**: `CompletableFuture.runAsync`、`CompletableFuture.supplyAsync` 未链 `.exceptionally()`
+**若必须裸用 CompletableFuture**（极少数场景），必须链 `.exceptionally()` 或 `.handle()`:
+```java
+CompletableFuture.runAsync(() -> doSomething(), executor)
+    .exceptionally(ex -> {
+        log.error("async task failed", ex);
+        return null;
+    });
+```
+
+**检测信号**: `CompletableFuture.runAsync` / `CompletableFuture.supplyAsync` 未链 `.exceptionally` / `.handle` / `.whenComplete`
 
 ---
 
@@ -147,58 +156,23 @@ public void onMessage(String payload) { ... }
 
 ### 5. ThreadLocal 上下文 (BLOCKER)
 
-**规则**: 手动 `set` ThreadLocal 后，必须在 `finally` 中 `clear`。Job 场景由 `LogAspect` AOP 兜底，不需要手动处理。
+**规则**: 仅框架层代码（Filter / Interceptor / Aspect / TenantContextExecutor）允许手动 `set/clear` ThreadLocal。业务代码禁止直接操作（见 #8）。框架层 `set` 后必须在 `finally` 中 `clear`。
 
-**正确做法**:
-```java
-try {
-    TenantContext.setTenantId(tenantId);
-    // business logic
-} finally {
-    TenantContext.clear();
-}
-```
+**允许 set/clear 的框架层位置**: 见 #8 中的"框架层上下文管理点"表格
 
 **反模式**:
 ```java
-// set 后无 clear（内存泄漏 + 租户数据串流）
+// 框架层 set 后漏 clear（内存泄漏 + 租户数据串流）
 TenantContext.setTenantId(tenantId);
 doBusinessLogic();
-// 方法结束，线程归还线程池，下次请求复用到脏上下文
+// 线程归还线程池，下次请求复用到脏上下文
 ```
 
 **检测信号**: `TenantContext.set` / `GameContext.set` / `LogContext.set` 后无对应 `finally { ...clear() }`
 
 ---
 
-### 6. 异步异常处理 (一般)
-
-**规则**: 若不使用 `AsyncUtils`，`CompletableFuture.runAsync()` / `supplyAsync()` 必须链 `.exceptionally()` 或 `.handle()` 处理异常。
-
-**正确做法**:
-```java
-// 推荐: 使用 AsyncUtils（内部已统一异常处理）
-AsyncUtils.runAsync(executor, () -> doSomething());
-
-// 若必须裸用: 链式处理异常
-CompletableFuture.runAsync(() -> doSomething(), executor)
-    .exceptionally(ex -> {
-        log.error("async task failed", ex);
-        return null;
-    });
-```
-
-**反模式**:
-```java
-// 异常被静默吞掉，排查问题时无任何日志
-CompletableFuture.runAsync(() -> doSomething(), executor);
-```
-
-**检测信号**: `CompletableFuture.runAsync` 或 `CompletableFuture.supplyAsync` 后无 `.exceptionally` / `.handle` / `.whenComplete`
-
----
-
-### 7. REST API 路径规范 (一般，仅约束新增代码)
+### 6. REST API 路径规范 (一般，仅约束新增代码)
 
 **规则**: 新增 API 路径使用小写，复合名词用短横线（kebab-case），资源层级用斜杠分段。存量驼峰路径保持不变。
 
@@ -230,3 +204,266 @@ CompletableFuture.runAsync(() -> doSomething(), executor);
 **注意**: `@PreAuthorize` 中的 perms 字符串（如 `ops_channelManage_link`）不受此规则约束，perms 用下划线分隔层级是权限系统约定
 
 **检测信号**: `@PostMapping` / `@GetMapping` 等注解中的路径包含大写字母
+
+---
+
+### 7. 禁止业务代码手动管理 TenantContext (BLOCKER)
+
+**规则**: 业务代码中禁止 `TenantContext.setTenantId()` + `TenantContext.clear()` 手动管理上下文。上下文由框架层统一管理。
+
+**框架层上下文管理点（仅以下场景允许 set/clear）**:
+
+| 场景 | 管理方 | 说明 |
+|------|--------|------|
+| HTTP 请求 | `TenantFilter` / `TokenInterceptor` | 请求开始 set，结束 clear |
+| MQ 消费 | `MqContextAspect` | `@RabbitListener` 前 set，后 clear |
+| 异步任务 | `AsyncUtils.wrapContext` | 捕获提交线程上下文，异步线程自动恢复/清理 |
+| Job 任务 | `TenantContextHelper` / `LogAspect` | Job 方法内按租户遍历 |
+| WebSocket | `UserAuthHandler` | 认证时 set，断开 clear |
+| 跨租户遍历 | `TenantContextExecutor` | 每个元素 set/clear |
+
+**反模式**:
+```java
+// ❌ @Async 方法内手动 set/clear（TTL 已自动传递，手动 set 只覆盖了部分字段）
+@Async("gameAsyncExecutor")
+public void asyncMethod(CoinBetSlips coinBetSlips) {
+    TenantContext.setTenantId(coinBetSlips.getTenantId());  // 漏了 currency/timezone
+    try {
+        doWork();
+    } finally {
+        TenantContext.clear();  // 清掉了 TTL 传递的完整上下文
+    }
+}
+
+// ❌ fireAndForget 内手动管理（AsyncUtils 已通过 wrapContext 处理）
+AsyncUtils.fireAndForget(executor, () -> {
+    TenantContext.setTenantId(tenantId);  // 多余，wrapContext 已恢复
+    try { doWork(); }
+    finally { TenantContext.clear(); }   // 多余，wrapContext 已清理
+});
+
+// ❌ 自定义 runInTenantContext 只设 tenantId（漏 currency/timezone）
+private void runInTenantContext(Integer tenantId, Runnable task) {
+    TenantContext.setTenantId(tenantId);  // 冲掉了已有的完整上下文
+    try { task.run(); }
+    finally { TenantContext.clear(); }
+}
+```
+
+**正确做法**:
+```java
+// ✅ @Async 方法: 什么都不用做，TTL 自动传递
+@Async("gameAsyncExecutor")
+public void asyncMethod(CoinBetSlips coinBetSlips) {
+    doWork();  // TenantContext 已由 TTL 从调用线程传递
+}
+
+// ✅ fireAndForget: 什么都不用做，AsyncUtils 内部 wrapContext 处理
+AsyncUtils.fireAndForget(executor, () -> doWork());
+
+// ✅ 需要切换租户时: 使用 TenantContextExecutor
+tenantContextExecutor.runWithTenantId(tenantId, () -> doWork());
+```
+
+**检测信号**: 业务代码（非 Filter/Interceptor/Aspect）中出现 `TenantContext.setTenantId` + `TenantContext.clear`
+
+---
+
+### 8. TenantContext 新增字段必须同步 AsyncUtils (BLOCKER)
+
+**规则**: 如果 `TenantContext` 新增字段（如 timezone 之后再加 locale 等），必须同步更新以下两处，否则异步线程会丢失新字段：
+
+1. `AsyncUtils.wrapContext` — 捕获新字段
+2. `AsyncUtils.ensureTenantContext` — TTL 传递路径和捕获值兜底路径都恢复新字段
+
+**当前三件套**: `tenantId` + `currency` + `timezone`
+
+**上下文丢失时行为**: 抛出 `IllegalStateException` 阻断执行 + TG 告警 + 输出提交线程调用栈（定位谁在无上下文状态下提交了异步任务）
+
+**检测信号**: `TenantContext` 新增 `set/get` 方法后，grep `AsyncUtils.wrapContext` 确认是否同步捕获
+
+---
+
+### 9. @Transactional 方法内禁止使用 forEachWithTenant (BLOCKER)
+
+**规则**: `TenantContextExecutor.forEachWithTenant` 内部 catch 异常不 re-throw，在 `@Transactional` 方法内使用会导致部分失败但事务照常提交（静默数据丢失）。
+
+**正确做法**:
+```java
+// ✅ 事务内: 使用 forEachWithTenantStrict（异常直接抛出，触发回滚）
+@Transactional(rollbackFor = Exception.class)
+public void calcMonthBill(String date) {
+    tenantContextExecutor.forEachWithTenantStrict(tenants, Tenant::getId, tenant -> {
+        // 任一租户失败 → 异常抛出 → 事务回滚
+    });
+}
+
+// ✅ 非事务: 使用 forEachWithTenant（单个失败不影响其他）
+public void syncAllTenants() {
+    tenantContextExecutor.forEachWithTenant(tenants, Tenant::getId, tenant -> {
+        // 单个失败记 error 日志，继续下一个
+    });
+}
+```
+
+**检测信号**: `@Transactional` 方法体内出现 `forEachWithTenant`（非 Strict 版本）
+
+---
+
+### 10. MQ 消费者业务方法需保证原子性 (BLOCKER)
+
+**规则**: `AbstractMqConsumer.consume()` 在业务失败时会释放幂等锁并允许重投递。因此传入的业务逻辑必须具备原子性（`@Transactional`），确保失败时完整回滚，重试时可安全重入。
+
+**正确做法**:
+```java
+// ✅ 业务方法有事务保护，失败回滚后重试安全
+@Transactional(rollbackFor = Exception.class)
+public void handleDeposit(DepositMessage msg) {
+    walletService.addBalance(msg.getUid(), msg.getCoin());
+    vipService.upgrade(msg.getUid());
+}
+```
+
+**反模式**:
+```java
+// ❌ 无事务，扣款成功但积分失败 → 重试导致重复扣款
+public void handleDeposit(DepositMessage msg) {
+    walletService.addBalance(msg.getUid(), msg.getCoin());
+    pointService.addPoints(msg.getUid(), msg.getCoin()); // 异常 → release → 重投递 → 再次 addBalance
+}
+```
+
+**检测信号**: `consume()` 的 lambda 内调用的方法涉及多个写操作但缺少 `@Transactional`
+
+---
+
+### 11. MqMessage.getIdempotentKey() 必须实现 (BLOCKER)
+
+**规则**: 所有 `MqMessage` 实现类必须显式实现 `getIdempotentKey()` 方法（接口已去除 default）。忘记实现会编译报错。
+
+**设计约定**:
+- key 中**不包含** tenantId / currency（`MqSender` 通过 `TextUtils.buildKey` 自动追加租户前缀）
+- 有确定性业务主键的消息返回业务 key（同一笔业务只处理一次）
+- 无确定性主键的消息（事件通知等）返回 null（由 Snowflake 保证唯一）
+
+```java
+// ✅ 有业务主键
+@Override
+public String getIdempotentKey() {
+    return uid + "|" + providerCode + "|" + roundId + "|" + orderNoBet;
+}
+
+// ✅ 无确定性主键（事件通知）
+@Override
+public String getIdempotentKey() {
+    return null;
+}
+```
+
+**检测信号**: 新增 `implements MqMessage` 的类未实现 `getIdempotentKey()`（编译失败）
+
+---
+
+### 12. SecurityContext 需手动传递 (一般，仅 merchant-service)
+
+**规则**: Spring Security 的 `SecurityContextHolder` 不走 TTL，异步线程需手动捕获和恢复。
+
+**正确做法**:
+```java
+final SecurityContext securityContext = SecurityContextHolder.getContext();
+AsyncUtils.fireAndForget(executor, () -> {
+    SecurityContextHolder.setContext(securityContext);
+    try {
+        doWork();  // TenantContext 由 wrapContext 自动管理
+    } finally {
+        SecurityContextHolder.clearContext();  // 只清 Security，不清 Tenant
+    }
+});
+```
+
+**检测信号**: merchant-service 的异步方法中使用 `SecurityUtils.getStoreUserId()` 但未传递 SecurityContext
+
+---
+
+### 13. 跨租户查询 — 禁止 save-switch-restore 模式 (BLOCKER)
+
+**规则**: 需要查询其他租户数据时，使用 `TenantIgnoreContext` + 显式 `tenantId` 条件，禁止"保存原始值 → 切换 → 恢复"模式。save-switch-restore 在异常时丢失原始上下文，且对调用方有隐式副作用。
+
+**正确做法**:
+```java
+// 绕过租户拦截器，显式传 tenantId 条件（编译安全 + 无副作用）
+var rates = TenantIgnoreContext.executeIgnoringTenant(() ->
+        tenantRateService.lambdaQuery()
+                .eq(TenantRate::getTenantId, targetTenantId)
+                .list());
+```
+
+**反模式**:
+```java
+// save-switch-restore: 异常时原始上下文丢失，调用方无感知
+Integer original = TenantContext.getTenantId();
+TenantContext.setTenantId(otherTenantId);
+try {
+    var result = tenantRateService.lambdaQuery().list();
+} finally {
+    if (Objects.nonNull(original)) TenantContext.setTenantId(original);
+    else TenantContext.clear();
+}
+```
+
+**检测信号**: 同一方法中出现 `TenantContext.getTenantId()` 赋值给局部变量 + 随后 `TenantContext.setTenantId(另一个值)`
+
+---
+
+### 14. @Lock4j SpEL 表达式必须引用存在的参数 (BLOCKER)
+
+**规则**: `@Lock4j(keys = {"#param"})` 中的 SpEL 表达式必须引用方法签名中实际存在的参数。引用不存在的参数时 SpEL 解析为 null，所有调用共享同一把锁或锁完全失效。
+
+**正确做法**:
+```java
+// 方法参数存在 tenantId — 直接引用
+@Lock4j(keys = {"#tenantId"}, expire = 300000)
+public void process(Integer tenantId) { ... }
+
+// 无参方法 — 从 TenantContext 动态取值（per-tenant 锁）
+@Lock4j(keys = {"T(com.great.utils.thread.TenantContext).getTenantId()"}, expire = 300000)
+public void processAll() { ... }
+
+// 无参方法 — 全局唯一锁（字面量字符串，注意单引号）
+@Lock4j(keys = {"'globalJobLock'"}, expire = 300000)
+public void globalJob() { ... }
+```
+
+**反模式**:
+```java
+// 方法签名无 tenantId 参数，#tenantId 解析为 null，锁 key 变成固定值
+@Lock4j(keys = {"#tenantId"}, expire = 300000)
+public void recalculateAll() { ... }
+```
+
+**检测信号**: `@Lock4j(keys` 中 `#xxx` 变量名不在方法参数列表中
+
+---
+
+### 15. 日期计算 — 禁止硬编码月天数 (一般)
+
+**规则**: 月份天数必须动态计算，禁止硬编码 28/30/31。使用 `LocalDate.lengthOfMonth()` 或 `YearMonth.lengthOfMonth()`。
+
+**正确做法**:
+```java
+// 方案 A: LocalDate
+LocalDate monthStart = LocalDate.parse(date + "01", DateTimeFormatter.BASIC_ISO_DATE);
+int lastDay = monthStart.lengthOfMonth();
+
+// 方案 B: YearMonth
+YearMonth ym = YearMonth.parse(date, DateTimeFormatter.ofPattern("yyyyMM"));
+int lastDay = ym.lengthOfMonth();
+```
+
+**反模式**:
+```java
+// 硬编码 31，2 月和 30 天的月份数据遗漏
+Integer endDate = Integer.parseInt(date + "31");
+```
+
+**检测信号**: 字符串拼接 `+ "31"` 或 `+ "28"` 或 `+ "30"` 用于日期范围计算
