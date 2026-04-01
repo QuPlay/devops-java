@@ -427,17 +427,29 @@ mvn test
     ```
     - 折行规则：`Optional.ofNullable(` 独占一行，查询语句缩进，`).orElseThrow(` 与 `Optional` 对齐
     - 如果后续不需要返回值（仅校验存在性），可省略变量声明
-17. **租户上下文** - `tenantId`、`currency`、`timezone` 统一从 `TenantContext` 获取，禁止从请求参数或硬编码传入
+17. **租户上下文（合并阻断项）** - `tenantId`、`currency`、`timezone` 统一从 `TenantContext` 获取，禁止从请求参数或硬编码传入，**禁止作为方法参数层层传递**
     ```java
     // ❌ 错误：从参数传入租户信息
     public void save(Long tenantId, String currency, SomeDto dto) { ... }
 
-    // ✅ 正确：从上下文获取
-    Integer tenantId = TenantContext.getTenantId();
-    String currency = TenantContext.getCurrency();
+    // ❌ 错误：顶层提取后层层传递
+    public void claim(User user) {
+        String currency = user.getCurrency();
+        processReward(user.getId(), coin, currency);  // 传递
+    }
+    private void processReward(Long uid, BigDecimal coin, String currency) {
+        saveRecord(uid, coin, currency);              // 继续传递
+    }
+
+    // ✅ 正确：需要的方法内部直接获取
+    private void processReward(Long uid, BigDecimal coin) {
+        String currency = TenantContext.getCurrency();
+        // ...
+    }
     ```
     - MyBatis-Plus 的 `FieldFill.INSERT` 会自动填充 `tenantId` / `currency`，正常 CRUD 不需要手动设值
     - 原生 SQL（Mapper XML）不走自动填充，必须手动从 `TenantContext` 取值设入
+    - **合法例外**：MQ 消息体字段（序列化传输）、跨租户操作（TenantIgnoreContext）、租户生命周期管理、目标币种非租户币种（如汇率转换）
 
 ## Infrastructure Conventions (基础设施使用规范)
 
