@@ -222,7 +222,7 @@ mvn test -Dtest=ClassName        # Run specific test
 
 **Critical**: Every database entity has a `tenantId` field.
 
-- All entities extend `BaseEntity` with auto-filled fields: `tenantId`, `createdAt`, `updatedAt`
+- All entities have `tenantId`, `createdAt`, `updatedAt` fields (via `FieldFill` auto-fill)
 - `TenantContext` (TransmittableThreadLocal) propagates tenant ID across layers
 - Interceptors populate tenant context from request headers
 - **ALWAYS clear context** in `finally` block or interceptor `afterCompletion()`
@@ -280,7 +280,7 @@ Use the `tools` module to generate MyBatis-Plus code from database tables:
 1. Configure database connection in generator class
 2. Run `AutoGeneratorUtils`
 3. Generates: PO (entity), Mapper (interface), Mapper.xml, Service, ServiceImpl
-4. All entities auto-extend `BaseEntity` with `tenantId`, audit fields
+4. PO 由代码生成器随数据库表结构生成，不强制继承 `BaseEntity`
 
 This eliminates 70%+ boilerplate code.
 
@@ -370,7 +370,7 @@ Use `@Cacheable`, `@CacheEvict`, or manual cache management via Redisson.
 1. Create table in MySQL
 2. Run code generator from `tools` module (`AutoGeneratorUtils`)
 3. Generated files appear in `dao` module (PO, Mapper, Mapper.xml, Service, ServiceImpl)
-4. Entity auto-extends `BaseEntity` (tenantId, audit fields)
+4. PO 由生成器产出，不强制继承 `BaseEntity`
 
 ### Adding a New MQ Queue
 1. Update `MqConst.java` with new exchange/queue/routing key
