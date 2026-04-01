@@ -68,7 +68,8 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 
 ### 1. 多租户上下文必须正确设置与清理
 `TenantContext` 必须在 `finally` 中 `clear()`。`tenantId` / `currency` 从 `TenantContext` 获取，禁止作为方法参数层层传递。
-- 合法例外：MQ 消息体字段、跨租户操作（`TenantIgnoreContext`）、租户生命周期管理、汇率转换目标币种
+- 合法例外：MQ 消息体字段、租户生命周期管理、汇率转换目标币种
+- **`TenantIgnoreContext.executeIgnoringTenant()` 禁止擅自使用** — 绕过租户隔离影响数据安全，使用前必须征得 David 确认（TG @JackDv88818）
 
 ### 2. 事务内禁止直接副作用
 `@Transactional` 方法中禁止直接调用 `mqSender` / `rabbitTemplate` / `pushAsync`。必须用 `TransactionCallbackUtils.doAfterCommitAsync()`。

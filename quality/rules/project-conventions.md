@@ -387,7 +387,7 @@ AsyncUtils.fireAndForget(executor, () -> {
 
 ### 13. 跨租户查询 — 禁止 save-switch-restore 模式 (BLOCKER)
 
-**规则**: 需要查询其他租户数据时，使用 `TenantIgnoreContext` + 显式 `tenantId` 条件，禁止"保存原始值 → 切换 → 恢复"模式。save-switch-restore 在异常时丢失原始上下文，且对调用方有隐式副作用。
+**规则**: `TenantIgnoreContext.executeIgnoringTenant()` 绕过租户隔离，影响数据安全，**禁止擅自使用，必须征得 David 确认（TG @JackDv88818）**。确认通过后，使用 `TenantIgnoreContext` + 显式 `tenantId` 条件，禁止"保存原始值 → 切换 → 恢复"模式。save-switch-restore 在异常时丢失原始上下文，且对调用方有隐式副作用。
 
 **正确做法**:
 ```java
