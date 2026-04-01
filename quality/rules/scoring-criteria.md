@@ -22,6 +22,7 @@
 10. 直接使用 RabbitTemplate 发送消息（应使用 MqSender.sendToExchange）
 11. 无意义封装方法 - 方法体只有一行方法调用的委托/转发（ServiceImpl 对 baseMapper 的框架约定委托除外）
 12. QueryWrapper 使用字符串列名（应使用 LambdaQueryWrapper，JSON 路径查询的 apply 除外）
+13. 租户上下文层层传递 - 方法参数中的 tenantId/currency/timezone 在 TenantContext 已设置时应从上下文获取，禁止作为参数逐层传递（MQ 消息体、跨租户操作、原生 SQL 除外）
 
 ### 严重问题 (BLOCKER - 存在即阻止提交，不打分)
 1. 方法超过 120 行
@@ -49,7 +50,6 @@
 6. @Async 未指定线程池名称
 7. CodeInfo 错误消息含中文或句末句号（必须全英文，无句号）
 8. getById null 检查未使用 Optional.ofNullable().orElseThrow() 标准写法
-9. 租户信息（tenantId/currency/timezone）从参数传入而非从 TenantContext 获取
 
 ### 轻微问题 (每项 -2 分)
 1. 命名不规范

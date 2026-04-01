@@ -467,3 +467,55 @@ Integer endDate = Integer.parseInt(date + "31");
 ```
 
 **检测信号**: 字符串拼接 `+ "31"` 或 `+ "28"` 或 `+ "30"` 用于日期范围计算
+
+---
+
+### 16. 租户上下文禁止层层传递 (BLOCKER)
+
+**规则**: 当 `TenantContext` 已由框架层设置（HTTP 拦截器 / MqContextAspect / TenantContextHelper），业务方法禁止将 `tenantId`、`currency`、`timezone` 作为参数层层传递。需要这些值的方法应在内部直接调用 `TenantContext.getTenantId()` / `TenantContext.getCurrency()` / `TenantContext.getTimezone()`。
+
+**为什么是 BLOCKER**: 参数传递导致调用方和被调方持有"两个来源"的同一份数据，重构时极易不一致（调用方传 A，方法内部又从 Context 取 B），且每新增一个调用层就要多传一个参数，污染整条调用链的方法签名。
+
+**正确做法**:
+```java
+// ✅ 方法内部需要 currency 时直接获取
+private void processReward(Long uid, BigDecimal coin) {
+    String currency = TenantContext.getCurrency();
+    codeRecords.setCurrency(currency);
+    // ...
+}
+
+// ✅ 调用方不需要提取再传递
+public void claim(User user) {
+    processReward(user.getId(), reward.getCoin());
+}
+```
+
+**反模式**:
+```java
+// ❌ 顶层提取，层层传递
+public void claim(User user) {
+    String currency = user.getCurrency();          // 提取
+    processReward(user.getId(), reward.getCoin(), currency);  // 传递
+}
+
+private void processReward(Long uid, BigDecimal coin, String currency) {
+    saveRecord(uid, coin, currency);               // 继续传递
+}
+
+private void saveRecord(Long uid, BigDecimal coin, String currency) {
+    codeRecords.setCurrency(currency);             // 最终使用
+}
+```
+
+**合法例外**（不应报告）:
+- **MQ 消息体的 tenantId/currency 字段**: `MqMessage` 接口强制携带，用于消费端恢复上下文，属于序列化传输不是方法参数传递
+- **跨租户操作**: `TenantIgnoreContext` 场景下需要显式传入目标租户的 tenantId（此时 TenantContext 的值不适用）
+- **租户生命周期管理**: `TableResetConfigServiceImpl.createTenant(tenantId, currency)` 等创建/删除租户操作，调用时上下文可能未设置
+- **目标币种非租户币种**: `WalletBase.convertWalletToCurrency(user, targetCurrency)` 中 currency 是转换目标，不是租户币种
+- **原生 SQL (Mapper XML)**: 不走 MyBatis-Plus 自动填充，WHERE 条件中的 tenantId/currency 需要手动传入（但应从 TenantContext 取值，不从调用方参数传递）
+
+**检测信号**:
+- 方法签名包含 `String currency` / `Integer tenantId` 参数，且方法内部仅用于传递给下游或设置实体字段（可直接从 TenantContext 获取）
+- 调用方提取 `user.getCurrency()` / `TenantContext.getCurrency()` / `header.getCurrency()` 后作为参数传入
+- 同一文件中 3 个以上方法串联传递同一个 currency/tenantId 参数
