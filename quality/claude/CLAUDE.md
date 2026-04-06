@@ -513,6 +513,24 @@ Use `@Cacheable`, `@CacheEvict`, or manual cache management via Redisson.
     - MyBatis-Plus `FieldFill.INSERT` 自动填充，正常 CRUD 不需要手动设值
     - 原生 SQL（Mapper XML）必须手动从 `TenantContext` 取值
     - **合法例外**：MQ 消息体字段（序列化传输）、跨租户操作（TenantIgnoreContext）、租户生命周期管理、目标币种非租户币种（如汇率转换）
+18. **日志禁止字符串拼接** - 必须使用 SLF4J 参数化占位符 `{}`，禁止 `+` 拼接
+    ```java
+    // ❌ 字符串拼接：无论日志级别是否开启都会执行拼接，浪费性能
+    log.info("init pool [host=" + host + ":" + port + ", db:" + database + "]");
+    log.error("request fail: " + e);
+    log.info(LogTag.MQ + "queue deleted: '{}'", queue);
+    log.info(buildPrefix(PREFIX_FMT) + message);
+    // ✅ 参数化占位符：日志级别关闭时跳过参数求值
+    log.info("init pool [host={}:{}, db:{}]", host, port, database);
+    log.error("request fail:", e);
+    log.info("{}queue deleted: '{}'", LogTag.MQ, queue);
+    log.info("{}{}", buildPrefix(PREFIX_FMT), message);
+    ```
+    - 异常对象作为**最后一个参数**传入，SLF4J 自动打印堆栈，不需要占位符
+    - 常量前缀拼接（`LogTag.XXX + "msg"`）同样违规，改为占位符传参
+    - 存量代码发现字符串拼接日志时，应顺手改为参数化写法
+    - **例外：前缀 + 动态模板拼接** — 当 `format` 参数本身是含 `{}` 占位符的模板字符串时，必须用 `prefix + format` 拼接构成完整模板，不能把 `format` 当作占位符的值传入（如 `XxlJobHelperUtil` 中 `log.info(PREFIX + format, merged)`）
+
 
 ---
 
