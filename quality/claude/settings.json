@@ -1,0 +1,55 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Agent",
+      "WebFetch",
+      "WebSearch",
+      "mcp__ide__getDiagnostics",
+
+      "Bash(ls:*)",
+      "Bash(echo:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(mkdir:*)",
+
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git stash:*)",
+      "Bash(git pull:*)",
+      "Bash(git cherry-pick:*)",
+
+      "Bash(mvn clean install:*)",
+      "Bash(mvn clean compile:*)",
+      "Bash(mvn clean package:*)",
+      "Bash(mvn compile:*)",
+      "Bash(mvn install:*)",
+      "Bash(mvn test:*)",
+      "Bash(mvn clean:*)",
+      "Bash(mvn dependency:tree:*)",
+      "Bash(mvn dependency:resolve:*)",
+      "Bash(mvn help:effective-pom:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -f:*)",
+      "Bash(rm -rf:*)",
+      "Bash(kubectl delete:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker stop:*)",
+      "Bash(mysql:*)",
+      "Bash(psql:*)"
+    ]
+  }
+}
