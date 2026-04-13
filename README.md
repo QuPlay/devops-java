@@ -9,6 +9,7 @@
 | **[CLAUDE.md](quality/claude/CLAUDE.md)** | Claude Code 项目指导 (单一真相源) |
 | **[CODE_REVIEW.md](quality/standards/CODE_REVIEW.md)** | 10 分制代码审查标准 (完整版) |
 | **[CHECKLIST.md](quality/standards/CHECKLIST.md)** | 提交前自检清单 (速查版) |
+| **[FLINK_DWS_CHANGE_SOP.md](quality/standards/FLINK_DWS_CHANGE_SOP.md)** | Flink DWS 作业变更与数据修复规范（防重复统计） |
 
 **审查工具**:
 - **SonarLint (IDE)** — 自动化静态检测，要求 IDEA 右上角绿色 ✅

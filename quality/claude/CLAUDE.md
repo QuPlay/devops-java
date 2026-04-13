@@ -13,6 +13,8 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 | goplay-message-service | 消息处理 |
 | goplay-task-service | XXL-Job 定时任务 |
 | gp-payment-service | 支付网关 |
+| goplay-report-service | 报表查询 + 数据校验（消费 DWS/ADS） |
+| goplay-flink-service | Flink 作业 SQL + StreamPark 配置归档（独立仓库管理） |
 | goplay-bom | 共享 BOM（dao / plat / service / utils / tools） |
 
 ### BOM Structure (Shared Library)
@@ -34,6 +36,10 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 - BOM README: `goplay-bom/README.md`
 - 游戏异常处理: `goplay-game-service/Readme.md`
 - 通用工具类: `com.great.utils`（加密、HTTP、缓存、ID 生成等）
+- Flink DWS 变更规范: `goplay-devops/quality/standards/FLINK_DWS_CHANGE_SOP.md`（改 dws_*/dwd_* 作业前必读，防重复统计）
+- Flink 作业 SQL 归档: `goplay-flink-service/flink-sql/`（dim/dwd/dws 三层，独立 Git 仓库），改作业前先改本目录文件再同步 StreamPark
+- 数据校验脚本: `goplay-report-service/report-service/src/main/resources/data-check/`，对应 `DataCheckDto.VerifyTable` 枚举
+- StreamPark 同步规范: 新增 DWS 表必须同步 4 处（goplay-flink-service/flink-sql/dws、data-check/sql、DataVerifyClient、VerifyTable enum）
 
 ## Package Naming Conventions
 
@@ -51,6 +57,13 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 ├── goplay-message-service/       # Message processing
 ├── goplay-task-service/          # Scheduled jobs (XXL-Job)
 ├── gp-payment-service/           # Payment gateways
+├── goplay-report-service/        # 报表查询 + 数据校验（消费 DWS/ADS）
+│   ├── report-interface/         # Feign client (DataCountClient / DataVerifyClient)
+│   ├── report-service/           # Spring Boot 服务（含 data-check/*.sql 校验脚本）
+│   └── report-common/            # 通用 DTO / Result
+├── goplay-flink-service/         # Flink 作业 SQL + StreamPark 归档（独立 Git 仓库）
+│   ├── flink-sql/                # 按数仓分层（dim / dwd / dws）
+│   └── streampark/               # StreamPark DB dump（敏感，.gitignore）
 ├── goplay-bom/                   # Shared modules
 │   ├── dao/                      # Data access (210+ mappers)
 │   ├── plat/                     # Game provider integrations
