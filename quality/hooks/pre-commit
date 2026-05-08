@@ -157,12 +157,17 @@ for file in $STAGED_FILES; do
         #   - 同行 // 注释
         #   - 命中行前 5 行 (含当前) 含 "Note:" 或 "not (an) actual credential"
         #     用于豁免 Redis key 命名等场景 (如 RedisKey.ADMIN_TOKEN = "ADMIN_TOKEN")
+        #   - 命名以 FIELD_/PARAM_/HEADER_ 开头的常量赋值
+        #     (项目约定: 协议字段名 / form 参数 key / HTTP header 名常量, 不存凭证)
+        #     例: public static final String FIELD_APP_TOKEN = "app_token";
+        #     KEY_ 不豁免 (API_KEY / SECRET_KEY 等约定就是凭证); 真凭证别用 FIELD_*_TOKEN 命名
         result=$(perl -ne '
             push @buf, $_;
             shift @buf if @buf > 5;
             next unless /(password|secret|token|apikey|api_key)\s*=\s*[\x22\x27][^\x22\x27]+[\x22\x27]/i;
             next if m{// };
             next if /[&?][a-zA-Z_]+=[\x22\x27]/;
+            next if /\b(?:FIELD|PARAM|HEADER)_[A-Z0-9_]+\s*=/;
             my $exempt = 0;
             for my $b (@buf) {
                 if ($b =~ /Note:/i || $b =~ /not\s+(an\s+)?actual\s+credential/i) {

@@ -7,21 +7,18 @@
 # ==============================================================================
 
 FULL_HOOK=".git/hooks/pre-commit"
-VERSION_FILE=".git/hooks/.version"
 
-# Check if full hooks are installed
-if [ ! -f "$VERSION_FILE" ]; then
-    echo "[DevOps] Git Hooks 未安装，正在自动安装..."
-    curl -fsSL https://raw.githubusercontent.com/QuPlay/devops-java/main/scripts/install-hooks.sh | bash
-    EXIT_CODE=$?
+# 每次 commit 都拉 install-hooks.sh, 由其内部权威版本检查 (curl 远程 .version)
+# 决定是否实际升级。URL 加 ?_=timestamp 绕过 GitHub raw / CDN 缓存。
+# 所有路径 (mvn / commit / 手动) 共享同一份判定逻辑, 见 install-hooks.sh 顶部。
+curl -fsSL "https://raw.githubusercontent.com/QuPlay/devops-java/main/scripts/install-hooks.sh?_=$(date +%s)" | bash
+EXIT_CODE=$?
 
-    if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 100 ]; then
-        echo "[DevOps] 安装失败，跳过检查"
-        exit 0
-    fi
+if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 100 ]; then
+    echo "[DevOps] 同步失败，使用旧版 hook 继续 commit"
 fi
 
-# Delegate to full hook
+# Delegate to full hook (此时已是最新版)
 if [ -x "$FULL_HOOK" ]; then
     exec "$FULL_HOOK" "$@"
 else

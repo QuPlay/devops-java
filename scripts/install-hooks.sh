@@ -24,27 +24,61 @@ if [ -n "$GIT_DIR" ] || [ -n "$GIT_INDEX_FILE" ]; then
     IN_GIT_HOOK=true
 fi
 
-# 防止多模块项目重复执行（60秒内不重复）
-if [ -f "$LAST_SYNC_FILE" ]; then
-    LAST_SYNC=$(cat "$LAST_SYNC_FILE" 2>/dev/null)
-    NOW=$(date +%s)
-    if [ -n "$LAST_SYNC" ] && [ $((NOW - LAST_SYNC)) -lt 60 ]; then
-        exit 0
-    fi
-fi
-
 # 获取本地版本
 LOCAL_VERSION=""
 [ -f "$LOCAL_VERSION_FILE" ] && LOCAL_VERSION=$(cat "$LOCAL_VERSION_FILE" 2>/dev/null | tr -d '[:space:]')
 
-# 获取 devops 仓库路径（优先本地，降级远程 clone）
-get_devops_path() {
-    for dir in "../goplay-devops" "../devops-java" "../DevOps-Java"; do
-        if [ -d "$dir/quality" ]; then
-            echo "$dir"
-            return 0
+# 远程版本权威判定 (curl 5 字节 .version, ~50ms; 加 timestamp 绕 CDN 缓存)
+# 这是所有路径 (mvn / commit / 手动) 共享的判定依据, 不依赖本地 ../devops-java/ 是否最新
+VERSION_URL="https://raw.githubusercontent.com/QuPlay/devops-java/main/quality/hooks/.version"
+REMOTE_VERSION=$(curl -fsSL --max-time 5 "${VERSION_URL}?_=$(date +%s)" 2>/dev/null | tr -d '[:space:]')
+
+# 判定是否必须更新:
+#   - LOCAL 为空 (首次安装)
+#   - DEVOPS_FORCE_UPDATE=1 (旁路调试用)
+#   - LOCAL ≠ REMOTE (版本变化, 必须拉最新)
+NEEDS_UPDATE=false
+if [ -z "$LOCAL_VERSION" ]; then
+    NEEDS_UPDATE=true
+elif [ "$DEVOPS_FORCE_UPDATE" = "1" ]; then
+    NEEDS_UPDATE=true
+elif [ -n "$REMOTE_VERSION" ] && [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
+    NEEDS_UPDATE=true
+fi
+
+# 不需要更新时, 走 60s 节流和 IN_GIT_HOOK 短路 (减少不必要的工作)
+# 反之版本不一致 / 首次安装会无视节流和 hook 短路, 保证最新版被拉到
+if [ "$NEEDS_UPDATE" != true ]; then
+    if [ -f "$LAST_SYNC_FILE" ]; then
+        LAST_SYNC=$(cat "$LAST_SYNC_FILE" 2>/dev/null)
+        NOW=$(date +%s)
+        if [ -n "$LAST_SYNC" ] && [ $((NOW - LAST_SYNC)) -lt 60 ]; then
+            exit 0
         fi
-    done
+    fi
+    if [ "$IN_GIT_HOOK" = true ]; then
+        date +%s > "$LAST_SYNC_FILE" 2>/dev/null
+        exit 0
+    fi
+fi
+
+# NEEDS_UPDATE 时让下游 get_devops_path 强制 git clone (不读可能陈旧的 ../devops-java/)
+if [ "$NEEDS_UPDATE" = true ]; then
+    DEVOPS_FORCE_UPDATE=1
+fi
+
+# 获取 devops 仓库路径（优先本地，降级远程 clone）
+# DEVOPS_FORCE_UPDATE=1 时强制走远程 clone, 跳过本地目录
+# (本地目录可能陈旧未 git pull, bootstrap 检测到版本不一致时必须拿远程最新)
+get_devops_path() {
+    if [ "$DEVOPS_FORCE_UPDATE" != "1" ]; then
+        for dir in "../goplay-devops" "../devops-java" "../DevOps-Java"; do
+            if [ -d "$dir/quality" ]; then
+                echo "$dir"
+                return 0
+            fi
+        done
+    fi
     rm -rf "$TEMP_DIR"
     git clone -q --depth 1 "$DEVOPS_REPO" "$TEMP_DIR" 2>/dev/null || return 1
     echo "$TEMP_DIR"
@@ -181,10 +215,9 @@ if [ -z "$LOCAL_VERSION" ]; then
     exit 0
 fi
 
-# 如果在 git hook 中执行且 hooks 已安装，跳过更新（防止自我更新导致执行错误）
-if [ "$IN_GIT_HOOK" = true ]; then
-    exit 0
-fi
+# 如果在 git hook 中执行且版本一致 (NEEDS_UPDATE=false 已在前面 exit 0),
+# 走到这里意味着本地版本陈旧或 FORCE 模式, 应该执行更新。
+# 旧版的 IN_GIT_HOOK 无条件 exit 0 已被前置版本检查替代。
 
 # 检查是否需要更新（比较版本）
 DEVOPS_PATH=$(get_devops_path) || { date +%s > "$LAST_SYNC_FILE"; exit 0; }
