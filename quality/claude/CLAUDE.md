@@ -32,10 +32,13 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 - MQ 拓扑: `goplay-bom/service/.../infra/mq/MqConst.java`
 - 全局异常: `goplay-bom/service/.../core/exception/GlobalExceptionHandler.java`
 - 游戏上下文: `goplay-bom/service/.../web/context/GameContext.java`
-- 租户上下文: `goplay-bom/utils/.../thread/TenantContext.java`
+- 租户上下文: `goplay-starter-common/.../common/context/TenantContext.java`（2026-05-05 从 `goplay-bom/utils/thread/` 迁出）
 - BOM README: `goplay-bom/README.md`
 - 游戏异常处理: `goplay-game-service/Readme.md`
-- 通用工具类: `com.great.utils`（加密、HTTP、缓存、ID 生成等）
+- 通用工具类:
+    - `com.great.common.util`（starter-common，平台级：DateUtils / IdUtils / IpUtils / JsonUtil / LogTag / SpringContextUtils / **AsyncUtils** / **GeoIpUtils** 等）
+    - `com.great.common.context`（starter-common，ThreadLocal：TenantContext / TenantIgnoreContext / RawDataContext / ExceptionContext / LogContext / RequestLogContext）
+    - `com.great.utils`（goplay-bom/utils，业务工具：加密、HTTP 组件、缓存组件、SMS、SES、i18n、warmup 等；BOM 调用方专用）
 - Flink DWS 变更规范: `goplay-devops/quality/standards/FLINK_DWS_CHANGE_SOP.md`（改 dws_*/dwd_* 作业前必读，防重复统计）
 - Flink 作业 SQL 归档: `goplay-flink-service/flink-sql/`（dim/dwd/dws 三层，独立 Git 仓库），改作业前先改本目录文件再同步 StreamPark
 - 数据校验脚本: `goplay-report-service/report-service/src/main/resources/data-check/`，对应 `DataCheckDto.VerifyTable` 枚举
@@ -126,7 +129,11 @@ public API / DTO / 接口一旦发布必须保持兼容。废弃用 `@Deprecated
 1. 先阅读 README 和现有代码结构，理解项目设计 — 不理解就动手等于盲改
 2. 不要随意修改已有核心逻辑，除非必要 — 核心逻辑经过生产验证，改动必须有明确理由
 3. 代码风格保持一致 — 遵循本文档所有编码规范
-4. 优先复用已有模块，禁止重复造轮子 — 如果项目已引入 `goplay-bom` 依赖，写代码前先检查 `com.great.utils`（加密、HTTP、缓存、ID 生成等工具类）和 `goplay-bom/service`（业务公共逻辑）是否已有现成实现；未引入则忽略
+4. 优先复用已有模块，禁止重复造轮子 — 写代码前按以下顺序检查：
+    - `com.great.common.*`（starter-common，平台级基础设施：context / util / exception / http / s3 / security / telegram，所有服务都引入）
+    - `com.great.utils.*`（goplay-bom/utils，BOM 业务工具：加密 / HTTP 组件 / 缓存组件 / SMS / SES / i18n / warmup 等，仅 BOM 调用方可用）
+    - `goplay-bom/service`（业务公共逻辑）
+    未引入对应模块则忽略对应层。
 
 ### 执行流程
 1. **先给出实现方案**（简要） — 说清楚改哪些文件、为什么这样改、有无替代方案，等确认后再动手

@@ -152,8 +152,26 @@ for file in $STAGED_FILES; do
     if [ -f "$file" ]; then
         # Check for hardcoded passwords, tokens, secrets
         # Matches: password = "xxx" / token = 'xxx' (Java field assignments)
-        # Excludes: URL query string concatenation like "&token=" + this.token
-        result=$(grep -nEi "(password|secret|token|apikey|api_key)\s*=\s*[\"'][^\"']+[\"']" "$file" 2>/dev/null | grep -v "// " | grep -vE '[&?][a-zA-Z_]+=[\""]' || true)
+        # Excludes:
+        #   - URL query string concatenation like "&token=" + this.token
+        #   - 同行 // 注释
+        #   - 命中行前 5 行 (含当前) 含 "Note:" 或 "not (an) actual credential"
+        #     用于豁免 Redis key 命名等场景 (如 RedisKey.ADMIN_TOKEN = "ADMIN_TOKEN")
+        result=$(perl -ne '
+            push @buf, $_;
+            shift @buf if @buf > 5;
+            next unless /(password|secret|token|apikey|api_key)\s*=\s*[\x22\x27][^\x22\x27]+[\x22\x27]/i;
+            next if m{// };
+            next if /[&?][a-zA-Z_]+=[\x22\x27]/;
+            my $exempt = 0;
+            for my $b (@buf) {
+                if ($b =~ /Note:/i || $b =~ /not\s+(an\s+)?actual\s+credential/i) {
+                    $exempt = 1; last;
+                }
+            }
+            next if $exempt;
+            printf("%d:%s", $., $_);
+        ' "$file" 2>/dev/null || true)
         if [ -n "$result" ]; then
             SENSITIVE_DATA="${SENSITIVE_DATA}\n  ${file}:\n${result}"
         fi
