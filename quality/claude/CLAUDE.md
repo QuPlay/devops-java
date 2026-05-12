@@ -15,14 +15,13 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 | gp-payment-service | 支付网关 |
 | goplay-report-service | 报表查询 + 数据校验（消费 DWS/ADS） |
 | goplay-flink-service | Flink 作业 SQL + StreamPark 配置归档（独立仓库管理） |
-| goplay-bom | 共享 BOM（dao / plat / service / utils / tools） |
+| goplay-bom | 共享 BOM（dao / service / utils / tools） |
 
 ### BOM Structure (Shared Library)
 
-`goplay-bom` 是共享业务逻辑的核心：
+`goplay-bom` 是共享业务逻辑的核心，包含四个子模块：
 
 - **dao/** - MyBatis-Plus 数据访问层（210+ mappers，自动生成）
-- **plat/** - 第三方游戏提供商集成（Strategy 模式）
 - **service/** - 核心业务逻辑（user, wallet, bet, game, promotion, report, affiliate 等）
 - **tools/** - MyBatis-Plus 代码生成器
 - **utils/** - 框架无关工具类（加密、JWT、HTTP、缓存、i18n 等）
@@ -32,7 +31,7 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 - MQ 拓扑: `goplay-bom/service/.../infra/mq/MqConst.java`
 - 全局异常: `goplay-bom/service/.../core/exception/GlobalExceptionHandler.java`
 - 游戏上下文: `goplay-bom/service/.../web/context/GameContext.java`
-- 租户上下文: `goplay-starter-common/.../common/context/TenantContext.java`（2026-05-05 从 `goplay-bom/utils/thread/` 迁出）
+- 租户上下文: `goplay-starter-common/.../common/context/TenantContext.java`
 - BOM README: `goplay-bom/README.md`
 - 游戏异常处理: `goplay-game-service/Readme.md`
 - 通用工具类:
@@ -55,6 +54,9 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 ```
 ├── goplay-api-service/           # Client API
 ├── goplay-game-service/          # Provider callbacks
+│   ├── game-common/              # 共享常量、DTO
+│   ├── game-plat/                # 第三方游戏提供商 Strategy 实现（20+ 提供商）
+│   └── game-service/             # Spring Boot 服务
 ├── goplay-merchant-service/      # Merchant management
 ├── goplay-push-service/          # WebSocket push (Netty)
 ├── goplay-message-service/       # Message processing
@@ -69,7 +71,6 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 │   └── streampark/               # StreamPark DB dump（敏感，.gitignore）
 ├── goplay-bom/                   # Shared modules
 │   ├── dao/                      # Data access (210+ mappers)
-│   ├── plat/                     # Game provider integrations
 │   ├── service/                  # Business logic
 │   ├── tools/                    # Code generator
 │   └── utils/                    # Utilities
@@ -270,7 +271,7 @@ try {
 
 ## Strategy Pattern for Third-Party Integrations
 
-- **Game Providers** (20+): PG, PP, Evolution, CQ9, JDB, OneAPI, etc. (in `plat/` module)
+- **Game Providers** (20+): PG, PP, Evolution, CQ9, JDB, OneAPI, etc. (in `goplay-game-service/game-plat/`)
 - **Payment Gateways**: Multiple channels in `gp-payment-service`
 - **Push Notifications**: Firebase, SMS (14 providers), WebSocket
 - **Third-party Login**: Google, Facebook, etc.
@@ -380,7 +381,7 @@ Use `@Cacheable`, `@CacheEvict`, or manual cache management via Redisson.
 ## Common Development Patterns
 
 ### Adding a New Game Provider
-1. Create package in `plat/game/{provider}/`
+1. Create package in `goplay-game-service/game-plat/src/main/java/com/great/plat/game/{provider}/`
 2. Implement `ThirdPartyLoginService`, `{Provider}Validator`, `{Provider}VerifyService`
 3. Add `{Provider}ExceptionStrategy` for custom error responses
 4. Register with `@ThirdPartyLoginType(GameEnum.Provider.{PROVIDER})`
