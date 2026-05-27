@@ -42,6 +42,7 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 - Flink 作业 SQL 归档: `goplay-flink-service/flink-sql/`（dim/dwd/dws 三层，独立 Git 仓库），改作业前先改本目录文件再同步 StreamPark
 - 数据校验脚本: `goplay-report-service/report-service/src/main/resources/data-check/`，对应 `DataCheckDto.VerifyTable` 枚举
 - StreamPark 同步规范: 新增 DWS 表必须同步 4 处（goplay-flink-service/flink-sql/dws、data-check/sql、DataVerifyClient、VerifyTable enum）
+- 权限命名规范: `devops-java/quality/standards/gen-permission.md`（自 2026-05-27 起 back-service 及所有新项目严格执行，动作后缀必须最后、菜单 perms 无动作后缀、不向后兼容 `_del`/`_query`/驼峰嵌动作等历史写法）
 
 ## Package Naming Conventions
 

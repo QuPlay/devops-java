@@ -5,6 +5,165 @@
 
 ---
 
+## 权限命名规则（必读，违反即返工）
+
+> **生效范围**：自 2026-05-27 起，**back-service 及后续所有新项目**严格执行本规范。代码评审发现违例必须返工，不接受任何例外。
+>
+> **不向后兼容**：项目历史代码中存在的不规范写法（如 `_del`、`thirdPartyPaymentChannelUpdate` 这类驼峰嵌动作、`_query`/`_edit`/`_list` 等非标动作词）**不会被加入映射表**，遇到时统一返工纠正。
+
+### 1. 权限只有两种类型
+
+| 类型 | 判定规则 | 用途 | 示例 |
+|------|---------|------|------|
+| **菜单 perms** | 最后一段**不在**动作映射表 | 标识页面/Tab/子模块，对应 `sp_store_auth_menu` 的菜单节点 | `benefit_box`、`benefit_box_manage`、`benefit_box_manage_audit` |
+| **操作 perms** | 最后一段**在**动作映射表 | 标识按钮/操作（查看、新增、修改等） | `benefit_box_manage_view`、`benefit_box_manage_audit_export` |
+
+**这是唯一的判定规则**。生成器（gen-permission）就靠"最后一段是否在映射表里"区分类型，不允许出现似动作但不在映射表里的写法。
+
+### 2. 分段结构
+
+```
+菜单 perms ：  {一级菜单}_{业务模块段...}                              （无动作后缀）
+操作 perms ：  {一级菜单}_{业务模块段...}_{动作后缀}                    （动作必须最末尾）
+                  └── 全小写         └── snake/camel 均可        └── 必须用映射表
+```
+
+### 3. 各段写法
+
+| 段位置 | 写法 | 示例 |
+|--------|------|------|
+| **一级菜单**（已预存，不生成） | 全小写 snake_case | `benefit` / `ops` / `finance` / `game_mgmt` |
+| **中间业务段**（二/三/四级菜单） | snake_case 或 camelCase 均可 | `box` / `depositMgmt` / `withdrawalAudit` |
+| **最后一段（动作后缀）** | **必须**使用映射表里的固定后缀 | `_view` / `_add` / `_update` / `_delete` / `_export` 等 |
+
+完整动作后缀映射表见 [Step 6 子权限操作名映射表](#子权限操作名映射表-menu_name-和中文翻译)。
+
+### 4. 核心铁律
+
+#### 4.1 动作后缀永远在最末尾
+
+**动作后缀（`_view` / `_add` / `_update` / `_delete` / `_export` ...）必须是权限字符串的最后一段，后面不允许再挂任何内容。**
+
+动作权限是叶子节点，不能再当父级。要新增子模块（更深层级），必须把子模块**插在父模块和动作之间**，绝不允许追加在动作之后。
+
+#### 4.2 业务段禁止使用动作词
+
+中间业务段禁止与动作映射表中的关键字重名：`view` / `add` / `update` / `delete` / `remove` / `export` / `import` / `sort` / `detail` / `status` / `create`。
+
+**为什么**：算法只看最后一段判类型，中间段重名动作词技术上"能跑"，但人读起来语义混乱 —— `benefit_box_view_config_view` 没人能一眼判断"box 下的 view 子模块的 config 查看按钮"还是其他结构。语义清晰优先于命名自由。
+
+### 5. 父子层级的正确表达
+
+层级通过数据库 `parent_id` 字段表达，**不靠路径字符串无限叠加**。同一棵子树下，菜单节点和它的操作权限共享同一个 `perms` 前缀；不同子树下出现的同名动作（如两个 `_view`）彼此独立，各自 `parent_id` 不同。
+
+```
+benefit_box                              (二级菜单 M — 菜单 perms)
+└── benefit_box_manage                    (三级菜单 C — 菜单 perms，manage 功能模块)
+    ├── benefit_box_manage_view           (操作权限 — manage 的查看按钮)
+    ├── benefit_box_manage_update         (操作权限 — manage 的修改按钮)
+    └── benefit_box_manage_audit          (四级菜单 C — 菜单 perms，manage 下的子模块)
+        ├── benefit_box_manage_audit_view      (操作权限 — audit 的查看)
+        └── benefit_box_manage_audit_update    (操作权限 — audit 的修改)
+```
+
+注意：`benefit_box_manage_view` 与 `benefit_box_manage_audit_view` **不是**父子关系 —— 它们的 `parent_id` 分别指向 `benefit_box_manage` 和 `benefit_box_manage_audit`。
+
+### 6. perms 全局唯一性
+
+`sp_store_auth_menu.perms` 字段在数据库层面**全局唯一**。菜单表不分租户，所有租户共享同一套权限定义；按租户隔离的是**角色表**（`sp_store_role` 带 `tenant_id`）和**角色-菜单关联表**（`sp_store_role_auth_menu` 带 `tenant_id`），各租户通过为本租户的角色挂载不同权限来实现差异化。
+
+**强制约束：**
+- 任意两条 perms 不允许相同，即使分属不同子树
+- 不同二级菜单下**禁止**使用相同末尾段组合的 perms（例如 `benefit_box_view` 和 `ops_box_view` 不可共存）
+- 多 Controller 批量生成时，生成器必须先做全局去重 + 冲突检测，发现冲突立即报错终止
+- 评审阶段必须确认 `SELECT COUNT(*) FROM sp_store_auth_menu WHERE perms = 'xxx'` 返回 0
+
+**冲突规避建议：**
+- 业务段应包含足够区分度的命名，依靠二级菜单前缀自然隔离（如 `benefit_box_overview_view` 和 `ops_channel_overview_view` 通过 `benefit_box` / `ops_channel` 区分）
+- 避免短到一个词的业务段（如单独的 `_box`、`_view`、`_list`），容易跨模块撞车
+
+### 7. 字符集与长度约束
+
+#### 7.1 允许字符
+
+仅 `[a-zA-Z0-9_]`，禁止：
+- 连字符 `-`（用 `_` 代替）
+- 点号 `.`
+- 中文、空格、其他特殊字符
+
+#### 7.2 长度约束
+
+| 约束项 | 上限 | 说明 |
+|--------|------|------|
+| 整条 perms | ≤ 100 字符 | 数据库 `sp_store_auth_menu.perms` 字段长度限制（预留余量） |
+| 单段（`_` 分割后每段） | ≤ 30 字符 | 单段超 30 字符说明业务命名过粗，应拆分子模块 |
+| 业务段驼峰单词数 | ≤ 3 个 | 超 3 个说明层级未拆分到位，应作为子菜单单独成段 |
+
+**示例：**
+```
+✅ benefit_box_manageBatchAudit_update              (业务段 3 词，OK)
+❌ benefit_box_manageBatchAuditApprovalReject_update (业务段 5 词，应拆为四级菜单 benefit_box_audit_approvalReject_update)
+```
+
+### 8. 反面示例（禁止，新代码出现一律打回）
+
+| 错误写法 | 错误原因 | 正确写法 |
+|---------|---------|---------|
+| `benefit_box_manage_view_audit` | 动作 `_view` 后面挂了 `_audit`，违反"动作必须最后"铁律 | `benefit_box_manage_audit_view` |
+| `benefit_box_manage_query` | `_query` 不在映射表，会被误判为菜单节点 | `benefit_box_manage_view` |
+| `benefit_box_manage_edit` | `_edit` 不在映射表 | `benefit_box_manage_update` |
+| `benefit_box_manage_list` | `_list` 不在映射表 | `benefit_box_manage_view` |
+| `benefit_box_manage_del` | `_del` 简写不在映射表 | `benefit_box_manage_delete` |
+| `finance_onlineDeposit_thirdPartyPaymentChannelUpdate` | 动作 `Update` 揉进驼峰，不是独立 `_` 段，会被误判为菜单 | `finance_onlineDeposit_thirdPartyPaymentChannel_update` |
+| `benefit_BoxManage_view` | 一级菜单（`benefit`）不能驼峰 | `benefit_boxManage_view` |
+| `benefit_box_management` | 似菜单非菜单，看不出是页面入口还是按钮 | 菜单写 `benefit_box_manage`；操作写 `benefit_box_manage_view` |
+| `benefit_box_mgmtBatchAcd_view` | 缩写歧义大（Mgmt? Acd?） | `benefit_box_manageBatchAudit_view` |
+| `benefit_box_view_config_view` | 业务段用 `view` 这种动作词，可读性差，容易引发歧义 | `benefit_box_overview_config_view` |
+
+### 9. 生成器识别算法（gen-permission 依赖此规则）
+
+生成器按以下步骤识别每条 perms：
+
+1. **前置校验**：先跑[违例检测](#违例处理拒绝生成-sql)，发现任何违例立即终止，**不生成任何 SQL**
+2. **拆分**：按 `_` 拆段
+3. **判类型**：检查最后一段是否在动作后缀映射表中
+   - **是** → 操作 perms（`menu_type='C'`，叶子节点）
+   - **否** → 菜单 perms（`menu_type='M'` 或 `'C'`，按层级 + 原型图确定）
+4. **建层级**：对所有菜单 perms 按公共前缀分组，每个菜单 perms 的 `parent_id` 指向其上一级菜单 perms；每个操作 perms 的 `parent_id` 指向其去掉最后一段动作后剩下的菜单 perms
+
+**关键依赖**：步骤 3 完全依赖映射表，所以非标动作词（`_del`/`_query`/`_edit`/`_list`/`Update` 驼峰嵌入等）必然识别错误，没有补救空间。
+
+#### 违例处理：拒绝生成 SQL
+
+生成器在 Step 2（提取权限）之后、Step 3（分析层级）之前执行**前置校验**，发现任何一条违例立即终止并报错，要求开发者改名后重跑：
+
+| 校验项 | 检测规则 | 报错示例 |
+|--------|---------|---------|
+| 非标动作词 | 最后一段长得像动作但不在映射表（`_del`/`_query`/`_edit`/`_list`/`_remove` 之外的） | `❌ ops_xxx_del: '_del' 不在动作映射表，应使用 '_delete'` |
+| 驼峰嵌动作 | 最后一段不在映射表，且以动作词驼峰结尾（如 `xxxUpdate`/`xxxDelete`/`xxxView`） | `❌ ops_xxx_thirdPartyUpdate: 动作必须独立 _ 段，应改为 'ops_xxx_thirdParty_update'` |
+| 业务段使用动作词 | 中间任一段（非最后段）等于动作映射表中的关键字 | `❌ benefit_box_view_config_view: 业务段 'view' 与动作词冲突` |
+| 一级菜单驼峰 | 第一段含大写字母 | `❌ benefit_BoxManage_view: 一级菜单 'benefit' 段不可与下一段连写驼峰，应为 'benefit_boxManage_view'` |
+| 字符非法 | 含 `[^a-zA-Z0-9_]` 字符 | `❌ benefit-box_view: 含非法字符 '-'` |
+| 长度超限 | 整条 > 100 字符，或单段 > 30 字符 | `❌ ...ApprovalReject_update: 单段 'manageBatchAuditApprovalReject' 超过 30 字符` |
+| 全局唯一冲突 | 与 `sp_store_auth_menu` 已有 perms 重复 | `❌ benefit_box_view: 与已有 perms 冲突，请改名` |
+
+**强制语义**：违例不允许"先生成再修"，必须先在 Controller 改名通过校验后再跑生成器。
+
+### 10. 命名口诀
+
+> **菜单写到底，操作加后缀；后缀查表用，动作永末位。**
+
+### 11. 新增动作后缀的流程
+
+若业务场景需要全新动作（如 `_publish`、`_approve`），不能直接在 Controller 里写，必须：
+
+1. 在团队评审会议提案，说明业务必要性与现有动作（如 `_update`）无法覆盖的理由
+2. 评审通过后更新 [Step 6 映射表](#子权限操作名映射表-menu_name-和中文翻译)，补充 `menu_name`（英文）和 `translation`（中文）
+3. 同步更新前端 i18n 配置
+4. 完成上述步骤后，新动作后缀才允许出现在代码中
+
+---
+
 ## 执行流程
 
 ### Step 1: 查找并读取 Controller 文件
