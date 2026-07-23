@@ -143,6 +143,43 @@ try {
 |------|----------|------|
 | **破坏 public API** | Claude Code | 已发布的 DTO/接口不得删除字段或改变行为 |
 
+### 1.6 Redis 单机/集群兼容类阻断项
+
+> **Redis 操作必须同时兼容单机（standalone）和集群（cluster）两种部署模式。**
+> 集群模式下键按 slot 分片，跨 slot 的多键命令直接 `CROSSSLOT` 报错 —— 单机能跑不代表集群能跑。
+
+| 问题 | 检测方式 | 说明 |
+|------|----------|------|
+| **跨 slot 多键命令** | Claude Code | `MGET`/`MSET`/`DEL(多key)`/`SUNION`/`SINTER`/`ZUNIONSTORE` 等多键命令，键未落同一 slot 集群下报错 |
+| **跨键 Lua / 事务 / 批处理** | Claude Code | Lua 脚本、`MULTI/EXEC`、Redisson `RBatch`/`RTransaction`、pipeline 涉及多个 key 时必须保证同 slot |
+| **`KEYS` 全量扫描** | Claude Code | 禁止 `KEYS pattern`，集群下需广播全节点且阻塞，一律用 `SCAN` |
+| **未加 hash tag 强约束** | Claude Code | 必须同 slot 的多键，key 必须用 `{}` hash tag 包裹业务标识（如 `{uid}`）保证落同一 slot |
+
+**错误示例**:
+```java
+// ❌ CacheServiceImpl.java:88 - 跨 slot 多键读，集群下 CROSSSLOT
+List<String> vals = jedis.mget("user:1:name", "user:2:name");  // BLOCKER!
+
+// ✅ 拆成单键读，或用 hash tag 保证同 slot
+// 单键（推荐，天然兼容集群）
+List<String> vals = userIds.stream()
+        .map(id -> jedis.get(buildKey(id)))
+        .collect(Collectors.toList());
+// 或必须批量时用 hash tag 落同一 slot
+jedis.mget("{user:1}:name", "{user:1}:age");  // 同 slot，集群可用
+```
+
+```java
+// ❌ 禁止 KEYS 全量扫描，集群下广播 + 阻塞
+Set<String> keys = jedis.keys("session:*");  // BLOCKER!
+
+// ✅ 用 SCAN 游标增量遍历
+ScanParams params = new ScanParams().match("session:*").count(100);
+// ... cursor 循环 SCAN
+```
+
+> **说明**: 项目统一走 `JedisUtil` / Redisson，`buildKey` 已自动加 `{tenantId}:{currency}:` 前缀。审查时确认新增 Redis 操作没有引入跨 slot 的多键语义；如确需多键原子操作，必须用 `{}` hash tag 把相关 key 锁定到同一 slot。
+
 ---
 
 ## 二、评分维度 (满分 10 分)
@@ -344,6 +381,9 @@ try {
 | 异常 | 空 catch 吞异常 | ❌ 终止 |
 | 异常 | 丢失异常链 | ❌ 终止 |
 | 兼容 | 破坏 public API | ❌ 终止 |
+| 兼容 | Redis 跨 slot 多键命令 | ❌ 终止 |
+| 兼容 | Redis 跨键 Lua/事务/批处理未同 slot | ❌ 终止 |
+| 兼容 | Redis `KEYS` 全量扫描 | ❌ 终止 |
 | 规范 | 通配符 import | ❌ 终止 |
 | 规范 | 调试语句 | ❌ 终止 |
 | 规范 | 硬编码敏感信息 | ❌ 终止 |
@@ -369,6 +409,7 @@ try {
 - 丢失异常链
 - 敏感信息日志泄露
 - 破坏 public API
+- Redis 操作是否同时兼容单机与集群（跨 slot 多键命令 / 跨键 Lua·事务·批处理 / KEYS 全量扫描）
 
 如有阻断项，输出: "❌ 存在阻断项，必须修复后重新提交"
 如无阻断项，继续第二步

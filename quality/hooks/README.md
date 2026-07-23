@@ -78,6 +78,16 @@ git push --no-verify
 
 ⚠️ 不推荐绕过，CI Pipeline 仍会执行检查。
 
+## 维护规范（改 hook 必读）
+
+**改动本目录任何文件（`pre-commit` / `pre-push` / `commit-msg` / `check-preauthorize.py` 等），必须同时把 `.version` 版本号 +1。审查该类改动时，把「`.version` 是否已 +1」作为阻断项确认。**
+
+原因：`.version` 是 hook 分发的唯一触发源。开发者执行 `mvn` 时，`quality/maven/hooks-installer.xml` 会拿本地 `.githooks/.version` 与本仓库 `quality/hooks/.version` 比对——**版本号一致就静默跳过，不会重新拷贝 hook**。改了脚本却忘记 +1，等于改动永远不会下发到任何人的机器，本地仍跑旧 hook，且毫无报错，极难排查。
+
+- 版本号规则：`主.次.修订`，常规改动 +1 修订位（如 `1.9.40` → `1.9.41`）
+- 一次改动一次 +1，不要攒着多次改动只 +1 一次
+- 只改本 README 这类纯文档、不影响 hook 行为的，可不 +1（不需要下发）
+
 ## 版本
 
-当前版本: 1.1.0
+版本号以本目录的 [`.version`](./.version) 文件为准（单一真源）。请勿在别处硬编码版本号，避免漂移。

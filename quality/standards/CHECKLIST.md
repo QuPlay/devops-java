@@ -30,6 +30,11 @@
 ### API 兼容类
 - [ ] **未破坏 public API** — 已发布的 DTO/接口字段不能删除
 
+### Redis 单机/集群兼容类
+- [ ] **无跨 slot 多键命令** — MGET/MSET/多 key DEL/SUNION 等键必须落同一 slot（用 `{}` hash tag）
+- [ ] **跨键 Lua/事务/批处理同 slot** — Lua、MULTI、RBatch、RTransaction、pipeline 涉多 key 时保证同 slot
+- [ ] **无 `KEYS` 全量扫描** — 一律用 `SCAN` 游标遍历
+
 ---
 
 ## 评分项 (影响最终得分)

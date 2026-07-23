@@ -43,6 +43,7 @@ GoPlay 多租户游戏平台 — Java 17 / Spring Boot 3.2.5 / Spring Cloud 微�
 - 数据校验脚本: `goplay-report-service/report-service/src/main/resources/data-check/`，对应 `DataCheckDto.VerifyTable` 枚举
 - StreamPark 同步规范: 新增 DWS 表必须同步 4 处（goplay-flink-service/flink-sql/dws、data-check/sql、DataVerifyClient、VerifyTable enum）
 - 权限命名规范: `devops-java/quality/standards/gen-permission.md`（自 2026-05-27 起 back-service 及所有新项目严格执行，动作后缀必须最后、菜单 perms 无动作后缀、不向后兼容 `_del`/`_query`/驼峰嵌动作等历史写法）
+- 游戏回调幂等与资金安全规范: `devops-java/quality/standards/GAME_CALLBACK_IDEMPOTENCY_SOP.md`（凡"外部回调驱动钱包账变"必读：幂等 insert 与账变必须同事务、禁删已提交记录、扣款 0 行不得静默归一为余额不足、合并按投注毛额校验、TiDB 单调聚簇 PK 写热点）
 
 ## Package Naming Conventions
 
